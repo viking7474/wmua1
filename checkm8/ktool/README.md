@@ -17,15 +17,22 @@ Khác biệt so với openra1n gốc:
 ## Usage (Windows)
 
 0. Đưa thiết bị vào **DFU**.
-1. Cài driver **libusbK** cho "Apple Mobile Device (DFU Mode)" (Zadig → chọn
-   libusbK; hoặc Device Manager → Update driver → Browse → libusbK).
-   **Bắt buộc libusbK**: driver WinUSB (mặc định, kể cả khi cài lại qua Zadig)
-   không thực hiện được USB Reset mà checkm8 cần giữa các stage → tool sẽ treo
-   ở heap spray. Đang ở WinUSB thì dùng Zadig → Replace Driver → libusbK.
+1. Cài driver USB đặc biệt (checkm8 cần **USB Reset thật** giữa các stage):
+   - **Cách A (khuyến nghị): UsbDk** — tải bản mới nhất tại
+     <https://github.com/daynix/UsbDk/releases> (ví dụ `UsbDk_1.0.22_x64.msi`),
+     cài rồi **khởi động lại máy**. Tool tự chuyển sang backend UsbDk khi có;
+     không cần đổi driver cho thiết bị (giữ driver Apple) và dùng được luôn cho
+     Pongo USB Device — không cần bước driver phụ.
+   - **Cách B: libusbK qua Zadig** — chọn "Apple Mobile Device (DFU Mode)"
+     (05AC 1227) → dropdown driver chọn **libusbK** → **Replace Driver**.
+     Khi Pongo USB Device hiện ra phải đổi driver libusbK riêng cho nó (bước 3).
+   - WinUSB (mặc định) **không đủ**: libusb 1.0.27 xác nhận backend WinUSB
+     không reset được device (chỉ cycle pipe) → tool treo ở heap spray.
 2. Chạy `myjb_ktool.exe` — tool tự chạy checkm8, boot PongoOS, và gửi chuỗi boot palera1n.
 3. Khi tool báo đã gửi xong, thiết bị re-enumerate "Pongo USB Device":
-   nếu quá trình upload KPF/ramdisk/overlay bị kẹt chờ, cài lại driver **libusbK**
-   cho Pongo USB Device rồi chạy lại tool (bước driver tương tự bước 1).
+   nếu dùng libusbK (cách B) và quá trình upload KPF/ramdisk/overlay bị kẹt chờ,
+   cài lại driver **libusbK** cho Pongo USB Device rồi chạy lại tool.
+   Với UsbDk (cách A) không cần làm gì thêm.
 4. Thiết bị boot vào jailbreak (palera1n rootless `/var/jb`). Cài bootstrap như bình thường.
 
 > Lưu ý: checkm8 là semi-tethered — mỗi lần reboot phải chạy lại tool.

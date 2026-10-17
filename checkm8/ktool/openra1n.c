@@ -40,6 +40,7 @@
 #define DFU_CLR_STATUS (4)
 #define MAX_BLOCK_SZ (0x50)
 #define DFU_MODE_PID (0x1227)
+#define RECOVERY_MODE_PID (0x1281)
 #define PONGO_MODE_PID (0x4141)
 #define DFU_STATE_MANIFEST (7)
 #define EP0_MAX_PACKET_SZ (0x40)
@@ -163,7 +164,16 @@ reset_usb_handle(const usb_handle_t *handle) {
 static bool
 wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 	if(libusb_init(NULL) == LIBUSB_SUCCESS) {
-		bool open_logged = false, cfg_fail_logged = false;
+		bool open_logged = false, cfg_fail_logged = false, recovery_logged = false;
+		unsigned tick = 0;
+
+#ifdef _WIN32
+		if(libusb_set_option(NULL, LIBUSB_OPTION_USE_USBDK) == LIBUSB_SUCCESS) {
+			LOG_INFO("UsbDk backend enabled (real USB reset support)");
+		} else {
+			LOG_DEBUG("UsbDk backend not available; using the default Windows backend");
+		}
+#endif
 		for(;;) {
 			if((handle->device = libusb_open_device_with_vid_pid(NULL, handle->vid, handle->pid)) != NULL) {
 				if(!open_logged) {
@@ -180,6 +190,22 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 					return true;
 				}
 				libusb_close(handle->device);
+			}
+			if(handle->pid == DFU_MODE_PID && !recovery_logged && (++tick % 200) == 0) {
+				libusb_device **list = NULL;
+				int cnt = (int)libusb_get_device_list(NULL, &list);
+				if(cnt >= 0) {
+					int d;
+					for(d = 0; d < cnt; ++d) {
+						struct libusb_device_descriptor desc;
+						if(libusb_get_device_descriptor(list[d], &desc) == LIBUSB_SUCCESS && desc.idVendor == handle->vid && desc.idProduct == RECOVERY_MODE_PID) {
+							recovery_logged = true;
+							LOG_WARN("Device is now in recovery mode -> the exploit attempt did not take; re-enter DFU and the tool will retry automatically");
+							break;
+						}
+					}
+					libusb_free_device_list(list, 1);
+				}
 			}
 			sleep_ms(usb_timeout);
 		}
@@ -1000,7 +1026,12 @@ checkm8_stage_patch(const usb_handle_t *handle) {
 		ret = true;
 		for(i = 0; ret && i < data_sz; i += packet_sz) {
 			packet_sz = MIN(data_sz - i, DFU_MAX_TRANSFER_SZ);
-			ret = send_usb_control_request(handle, 0x21, DFU_DNLOAD, 0, 0, &data[i], packet_sz, NULL);
+			transfer_ret.sz = 0;
+			transfer_ret.ret = USB_TRANSFER_ERROR;
+			ret = send_usb_control_request(handle, 0x21, DFU_DNLOAD, 0, 0, &data[i], packet_sz, &transfer_ret);
+			if(transfer_ret.ret != USB_TRANSFER_OK || transfer_ret.sz != packet_sz) {
+				LOG_WARN("payload chunk at %u failed (ret=%d sz=%u/%u)", (unsigned)i, (int)transfer_ret.ret, (unsigned)transfer_ret.sz, (unsigned)packet_sz);
+			}
 		}
 		send_usb_control_request_no_data(handle, 0x21, 4, 0, 0, 0, NULL);
 	}
@@ -1172,7 +1203,7 @@ int main(int argc, char **argv) {
 	LOG_RAINBOW("-=-=- myJB checkm8 tool (openra1n fork) -=-=-");
 
 #ifdef _WIN32
-	LOG_WARN("Windows: the DFU device driver must be libusbK (Zadig -> Replace Driver -> libusbK). WinUSB silently skips the USB reset checkm8 needs and the heap spray will hang");
+	LOG_WARN("Windows: checkm8 needs a driver with a real USB reset. Recommended: install UsbDk (https://github.com/daynix/UsbDk/releases) and reboot; or bind the libusbK driver via Zadig. WinUSB will hang at the heap spray");
 #endif
 
 	usb_handle_t handle;
