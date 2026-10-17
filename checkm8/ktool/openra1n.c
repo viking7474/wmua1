@@ -885,8 +885,15 @@ checkm8_stage_spray(const usb_handle_t *handle) {
 
 	if(config_large_leak == 0) {
 		if(cpid == 0x7001 || cpid == 0x7000 || cpid == 0x7002 || cpid == 0x8003 || cpid == 0x8000) {
+			unsigned attempts = 0;
+			bool stall = false, leak = false, no_leak = false;
+
 			LOG_INFO("heap spray: waiting for stall+leak state (no output until it lands is normal)");
-			while(!checkm8_usb_request_stall(handle) || !checkm8_usb_request_leak(handle) || !checkm8_no_leak(handle)) {}
+			while(!(stall = checkm8_usb_request_stall(handle)) || !(leak = checkm8_usb_request_leak(handle)) || !(no_leak = checkm8_no_leak(handle))) {
+				if((++attempts & 0x3FF) == 0) {
+					LOG_INFO("heap spray: %u attempts, last seen stall=%u leak=%u no_leak=%u", attempts, stall, leak, no_leak);
+				}
+			}
 		} else {
 			LOG_INFO("heap spray: forcing stall");
 			checkm8_stall(handle);
@@ -1163,6 +1170,10 @@ int main(int argc, char **argv) {
 	(void)argv;
 
 	LOG_RAINBOW("-=-=- myJB checkm8 tool (openra1n fork) -=-=-");
+
+#ifdef _WIN32
+	LOG_WARN("Windows: the DFU device driver must be libusbK (Zadig -> Replace Driver -> libusbK). WinUSB silently skips the USB reset checkm8 needs and the heap spray will hang");
+#endif
 
 	usb_handle_t handle;
 	usb_timeout = 5;
