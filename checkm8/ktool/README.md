@@ -28,11 +28,15 @@ Khác biệt so với openra1n gốc:
      Khi Pongo USB Device hiện ra phải đổi driver libusbK riêng cho nó (bước 3).
    - WinUSB (mặc định) **không đủ**: libusb 1.0.27 xác nhận backend WinUSB
      không reset được device (chỉ cycle pipe) → tool treo ở heap spray.
-2. Chạy `myjb_ktool.exe` — tool tự chạy checkm8, boot PongoOS, và gửi chuỗi boot palera1n.
+2. Chạy `myjb_ktool.exe` **as Administrator** (UsbDk cần quyền admin để redirect
+   thiết bị) — tool tự chạy checkm8, boot PongoOS, và gửi chuỗi boot palera1n.
 3. Khi tool báo đã gửi xong, thiết bị re-enumerate "Pongo USB Device":
    nếu dùng libusbK (cách B) và quá trình upload KPF/ramdisk/overlay bị kẹt chờ,
    cài lại driver **libusbK** cho Pongo USB Device rồi chạy lại tool.
    Với UsbDk (cách A) không cần làm gì thêm.
+   Mẹo: khi tool đang ở "Waiting for PongoOS device", chỉ cần mở Zadig →
+   "Pongo USB Device" → Replace Driver → libusbK; tool đang chờ sẽ tự mở được
+   thiết bị ngay, không phải chạy lại từ đầu.
 4. Thiết bị boot vào jailbreak (palera1n rootless `/var/jb`). Cài bootstrap như bình thường.
 
 > Lưu ý: checkm8 là semi-tethered — mỗi lần reboot phải chạy lại tool.

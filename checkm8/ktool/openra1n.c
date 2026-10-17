@@ -213,6 +213,7 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 	{
 		bool open_logged = false, cfg_fail_logged = false, recovery_logged = false;
 		unsigned tick = 0;
+		int last_seen_pid = -1;
 
 		for(;;) {
 			if((handle->device = libusb_open_device_with_vid_pid(NULL, handle->vid, handle->pid)) != NULL) {
@@ -231,18 +232,30 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 				}
 				libusb_close(handle->device);
 			}
-			if(handle->pid == DFU_MODE_PID && !recovery_logged && (++tick % 200) == 0) {
+			if((++tick % 200) == 0) {
 				libusb_device **list = NULL;
 				int cnt = (int)libusb_get_device_list(NULL, &list);
 				if(cnt >= 0) {
-					int d;
+					int d, seen_pid = -1;
 					for(d = 0; d < cnt; ++d) {
 						struct libusb_device_descriptor desc;
-						if(libusb_get_device_descriptor(list[d], &desc) == LIBUSB_SUCCESS && desc.idVendor == handle->vid && desc.idProduct == RECOVERY_MODE_PID) {
-							recovery_logged = true;
-							LOG_WARN("Device is now in recovery mode -> the exploit attempt did not take; re-enter DFU and the tool will retry automatically");
-							break;
+						if(libusb_get_device_descriptor(list[d], &desc) == LIBUSB_SUCCESS && desc.idVendor == handle->vid) {
+							if(seen_pid < 0) {
+								seen_pid = (int)desc.idProduct;
+							}
+							if(handle->pid == DFU_MODE_PID && !recovery_logged && desc.idProduct == RECOVERY_MODE_PID) {
+								recovery_logged = true;
+								LOG_WARN("Device is now in recovery mode -> the exploit attempt did not take; re-enter DFU and the tool will retry automatically");
+							}
 						}
+					}
+					if(seen_pid != last_seen_pid) {
+						if(seen_pid >= 0) {
+							LOG_DEBUG("while waiting: Apple USB device visible: PID 0x%04X", seen_pid);
+						} else {
+							LOG_DEBUG("while waiting: no Apple USB device visible");
+						}
+						last_seen_pid = seen_pid;
 					}
 					libusb_free_device_list(list, 1);
 				}
