@@ -1245,16 +1245,29 @@ pongo_upload(const usb_handle_t *handle, const uint8_t *data, unsigned size) {
 	}
 
 #ifdef HAVE_LIBUSB
+	/* PongoOS bulk OUT endpoint (boot.py: dev.write(2, ...)). Chunk at 1MB:
+	 * safe for the Windows backends and for Linux usbfs memory limits. */
 	{
-		int transferred = 0;
+		unsigned done = 0;
 
-		if(libusb_bulk_transfer(handle->device, 2, (unsigned char *)data, (int)size, &transferred, 1000000) != LIBUSB_SUCCESS) {
-			LOG_ERROR("Failed to upload payload over bulk endpoint");
-			return false;
-		}
-		if(transferred != (int)size) {
-			LOG_ERROR("Short bulk transfer: %d/%u", transferred, size);
-			return false;
+		while(done < size) {
+			uint32_t chunk = size - done;
+			int transferred = 0;
+			int rret;
+
+			if(chunk > 0x100000) {
+				chunk = 0x100000;
+			}
+			rret = libusb_bulk_transfer(handle->device, 2, (unsigned char *)data + done, (int)chunk, &transferred, 1000000);
+			if(rret != LIBUSB_SUCCESS) {
+				LOG_ERROR("bulk upload failed at %u/%u bytes: %s", done, size, libusb_error_name(rret));
+				return false;
+			}
+			if(transferred <= 0) {
+				LOG_ERROR("bulk upload made no progress at %u/%u bytes", done, size);
+				return false;
+			}
+			done += (unsigned)transferred;
 		}
 	}
 #else
@@ -1267,33 +1280,49 @@ pongo_upload(const usb_handle_t *handle, const uint8_t *data, unsigned size) {
 	return true;
 }
 
-static void
+static bool
 pongo_run_palera1n(usb_handle_t *handle) {
 	LOG_INFO("Waiting for PongoOS device (USB PID 0x4141)");
 	init_usb_handle(handle, APPLE_VID, PONGO_MODE_PID);
 	wait_usb_handle(handle, NULL, NULL);
+
+#ifdef HAVE_LIBUSB
+	/* Required before any bulk I/O on Windows: libusb matches the endpoint
+	 * to a *claimed* interface, otherwise libusb_bulk_transfer fails
+	 * instantly with LIBUSB_ERROR_NOT_FOUND (palera1n claims it too). */
+	{
+		int rret = libusb_claim_interface(handle->device, 0);
+
+		if(rret != LIBUSB_SUCCESS) {
+			LOG_ERROR("Failed to claim PongoOS interface 0: %s", libusb_error_name(rret));
+			return false;
+		}
+		LOG_DEBUG("claimed PongoOS interface 0");
+	}
+#endif
 
 	LOG_INFO("PongoOS connected, sending patching sequence");
 	pongo_send_cmd(handle, "fuse lock\n");
 	pongo_send_cmd(handle, "sep auto\n");
 
 	LOG_INFO("Uploading KPF (checkra1n-kpf-ploosh)");
-	if(!pongo_upload(handle, payloads_checkra1n_kpf_ploosh_bin, payloads_checkra1n_kpf_ploosh_bin_len)) return;
+	if(!pongo_upload(handle, payloads_checkra1n_kpf_ploosh_bin, payloads_checkra1n_kpf_ploosh_bin_len)) return false;
 	pongo_send_cmd(handle, "modload\n");
 
 	pongo_send_cmd(handle, "palera1n_flags 0x4000000\n");
 
 	LOG_INFO("Uploading ramdisk");
-	if(!pongo_upload(handle, payloads_ramdisk_bin, payloads_ramdisk_bin_len)) return;
+	if(!pongo_upload(handle, payloads_ramdisk_bin, payloads_ramdisk_bin_len)) return false;
 	pongo_send_cmd(handle, "ramdisk\n");
 
 	LOG_INFO("Uploading overlay (binpack)");
-	if(!pongo_upload(handle, payloads_overlay_bin, payloads_overlay_bin_len)) return;
+	if(!pongo_upload(handle, payloads_overlay_bin, payloads_overlay_bin_len)) return false;
 	pongo_send_cmd(handle, "overlay\n");
 
 	LOG_INFO("Booting kernel (rootdev=md0)");
 	pongo_send_cmd(handle, "xargs  rootdev=md0\n");
 	pongo_send_cmd(handle, "bootx\n");
+	return true;
 }
 
 #if defined(_WIN32) || defined(WIN32)
@@ -1355,7 +1384,14 @@ int main(int argc, char **argv) {
 
 	sleep_ms(3000);
 	checkm8_boot_pongo(&handle);
-	pongo_run_palera1n(&handle);
+	if(!pongo_run_palera1n(&handle)) {
+		LOG_ERROR("Boot chain was not sent completely (see the error above); the device is still sitting in PongoOS. Re-enter DFU and run the tool again");
+		myjb_log_exit(EXIT_FAILURE);
+#if defined(_WIN32) || defined(WIN32)
+		pause_if_own_console();
+#endif
+		return EXIT_FAILURE;
+	}
 
 	LOG_INFO("Boot chain sent; device should now boot jailbroken (palera1n boot).");
 	myjb_log_exit(EXIT_SUCCESS);
