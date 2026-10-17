@@ -193,6 +193,7 @@ Không có jbserver của mình (chưa JB / JB khác / binary lạ) → không a
 | `basebins/launchd_hook/include/jbserver.h` | + cmd enum đồng bộ giá trị |
 | `basebins/launchd_hook/src/jbserver.c` | + `myjb_session_secret`, + handler HMAC (`CCHmac`), + dispatch case, + sinh secret trong `init_server()` |
 | `basebins/base_hook/src/main.c` | + gate attest trong `init_tweaks()`, + export `myjb_tweak_key` / `myjb_attested` |
+| `basebins/libjailbreak/include/common.h` | + include `mach/*` (Xcode 26 coi implicit declaration là error), + enum sync `JBSERVER_CMD_MYJB_ATTEST` |
 
 Toolchain build (xác nhận từ Makefile): macOS + Xcode CLT
 (`xcrun --sdk iphoneos clang`, `-arch arm64e -arch arm64`, `-mios-version-min=12.0`,

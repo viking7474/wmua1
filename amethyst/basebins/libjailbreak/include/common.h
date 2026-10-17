@@ -3,12 +3,17 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
 #include <sys/sysctl.h>
 #include <xpc/xpc.h>
 #include <signal.h>
 #include <pthread.h>
+#include <mach/mach.h>
+#include <mach/mach_init.h>
+#include <mach/mach_traps.h>
+#include <mach/task.h>
 
 #define FLAG_WAIT_EXEC   (1 << 5)
 #define FLAG_DELAY       (1 << 4)
@@ -25,7 +30,8 @@ typedef enum {
     JBSERVER_CMD_PLATFORMIZE,
     JBSERVER_CMD_UNSANDBOX,
     JBSERVER_CMD_SET_UID_GID,
-    JBSERVER_CMD_HEARTBEAT
+    JBSERVER_CMD_HEARTBEAT,
+    JBSERVER_CMD_MYJB_ATTEST
 } jbserver_cmd_t;
 
 typedef enum {
