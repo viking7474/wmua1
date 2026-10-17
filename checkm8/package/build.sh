@@ -28,17 +28,20 @@ chmod 755 "$STAGE/DEBIAN/postinst"
 cp "$ROOT/DEBIAN/prerm" "$STAGE/DEBIAN/prerm"
 chmod 755 "$STAGE/DEBIAN/prerm"
 
-sed "s/^Version: .*/Version: $VERSION/" "$ROOT/DEBIAN/control" > "$STAGE/DEBIAN/control"
-chmod 644 "$STAGE/DEBIAN/control"
-
 cp "$DYLIB" "$STAGE/var/jb/usr/lib/TweakInject/myjb_loader.dylib"
 chmod 755 "$STAGE/var/jb/usr/lib/TweakInject/myjb_loader.dylib"
 
 mkdir -p "$OUT_DIR"
-PKG="com.wmua1.myjb.checkm8_${VERSION}_iphoneos-arm64.deb"
-if dpkg-deb --help 2>&1 | grep -q root-owner-group; then
-    dpkg-deb --root-owner-group -Zgzip --build "$STAGE" "$OUT_DIR/$PKG"
-else
-    dpkg-deb -Zgzip --build "$STAGE" "$OUT_DIR/$PKG"
-fi
-echo "built: $OUT_DIR/$PKG"
+# Classic bootstraps (checkra1n 12-14) report "iphoneos-arm"; Procursus
+# (palera1n rootless / odysseyra1n) reports "iphoneos-arm64" -> ship both.
+for ARCH in iphoneos-arm iphoneos-arm64; do
+    sed -e "s/^Version: .*/Version: $VERSION/" -e "s/^Architecture: .*/Architecture: $ARCH/" "$ROOT/DEBIAN/control" > "$STAGE/DEBIAN/control"
+    chmod 644 "$STAGE/DEBIAN/control"
+    PKG="com.wmua1.myjb.checkm8_${VERSION}_${ARCH}.deb"
+    if dpkg-deb --help 2>&1 | grep -q root-owner-group; then
+        dpkg-deb --root-owner-group -Zgzip --build "$STAGE" "$OUT_DIR/$PKG"
+    else
+        dpkg-deb -Zgzip --build "$STAGE" "$OUT_DIR/$PKG"
+    fi
+    echo "built: $OUT_DIR/$PKG"
+done

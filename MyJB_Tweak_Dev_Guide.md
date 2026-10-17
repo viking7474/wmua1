@@ -276,9 +276,12 @@ Substrate) và/hoặc `/usr/lib/TweakInject` (libhooker) — thư mục nào t�
 
 E2E smoke test (đã có sẵn tweak test trong repo):
 
-1. Cài `com.wmua1.myjb.checkm8_*.deb` lên máy:
-   - Filza: chép deb vào máy (web server của Filza) → tap → Install;
-   - hoặc SSH (OpenSSH/dropbear): `dpkg -i <deb>` (thêm `--force-architecture` nếu dpkg kêu arch).
+1. Cài deb **đúng arch** lên máy (CI artifact `myjb-checkm8` xuất cả 2 biến thể):
+   - checkra1n classic/Cydia (iOS 12–14, `dpkg --print-architecture` = iphoneos-arm):
+     `com.wmua1.myjb.checkm8_*_iphoneos-arm.deb`
+   - Procursus/palera1n rootless (iphoneos-arm64): `..._iphoneos-arm64.deb`
+   - Cách cài: Filza (chép deb vào máy qua web server → tap → Install); hoặc SSH:
+     `dpkg -i <deb>` (nếu dpkg kêu arch, dùng `dpkg -i --force-architecture <deb>`).
    CI artifacts: `myjb-checkm8` (deb) + `myjb-e2e-testtweak` (test_tweak.dylib).
 2. Lấy kdev từ máy: `cat /var/mobile/Library/MyJB/kdev.txt` → copy hex sang PC.
 3. Trên PC, đóng gói tweak test (tweak dylib từ artifact CI):
