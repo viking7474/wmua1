@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+for d in "/Library/MobileSubstrate/DynamicLibraries" "/usr/lib/TweakInject"; do
+    rm -f "$d/myjb_loader.dylib" "$d/myjb_loader.plist"
+done
+
+exit 0

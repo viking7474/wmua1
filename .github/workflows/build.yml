@@ -9,6 +9,8 @@ on:
       - 'amethyst/basebins/**'
       - 'amethyst/Amethyst/**'
       - 'checkm8/package/**'
+      - 'tools/e2e/**'
+      - 'tools/myjb_build.py'
       - '.github/workflows/build.yml'
 
 jobs:
@@ -83,6 +85,15 @@ jobs:
           checkm8/package/build.sh amethyst/basebins/myjb_loader/myjb_loader.dylib dist
           ls -la dist
 
+      - name: Build E2E test tweak (arm64, iOS 12+)
+        run: |
+          set -euo pipefail
+          mkdir -p dist/e2e
+          xcrun -sdk iphoneos clang -target arm64-apple-ios12.0 -dynamiclib -O2 \
+            -o dist/e2e/test_tweak.dylib tools/e2e/test_tweak.c
+          ldid -S dist/e2e/test_tweak.dylib
+          ls -la dist/e2e
+
       - name: Upload basebins artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -98,6 +109,13 @@ jobs:
         with:
           name: myjb-checkm8
           path: dist/*.deb
+          if-no-files-found: error
+
+      - name: Upload E2E test tweak
+        uses: actions/upload-artifact@v4
+        with:
+          name: myjb-e2e-testtweak
+          path: dist/e2e/test_tweak.dylib
           if-no-files-found: error
 
       - name: Upload IPA

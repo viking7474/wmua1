@@ -264,3 +264,34 @@ Cùng builder + cùng container v1; chỉ khác cách cài loader và engine:
 - **Đừng bật `MYJB_LEGACY`** trên checkm8: ElleKit đã load tweak thường, bật sẽ double-load.
 - Containers: `/var/jb/usr/lib/myjb/containers/` (ưu tiên) hoặc `/var/mobile/Library/MyJB/containers/`.
 - Cài deb → respring → xem log như mục E (`MYJB_DEBUG`).
+
+---
+
+## I. Chạy trên checkm8/checkra1n (rootful, iOS 12–14) — verified 13.5.1
+
+JB bằng `myjb_ktool.exe --legacy` (chuỗi checkra1n 0.12.4b). Bootstrap checkra1n
+(Cydia hoặc odysseyra1n): engine hook do Substrate/libhooker của bootstrap cấp;
+postinst tự mirror loader vào `/Library/MobileSubstrate/DynamicLibraries` (Cydia
+Substrate) và/hoặc `/usr/lib/TweakInject` (libhooker) — thư mục nào tồn tại.
+
+E2E smoke test (đã có sẵn tweak test trong repo):
+
+1. Cài `com.wmua1.myjb.checkm8_*.deb` lên máy:
+   - Filza: chép deb vào máy (web server của Filza) → tap → Install;
+   - hoặc SSH (OpenSSH/dropbear): `dpkg -i <deb>` (thêm `--force-architecture` nếu dpkg kêu arch).
+   CI artifacts: `myjb-checkm8` (deb) + `myjb-e2e-testtweak` (test_tweak.dylib).
+2. Lấy kdev từ máy: `cat /var/mobile/Library/MyJB/kdev.txt` → copy hex sang PC.
+3. Trên PC, đóng gói tweak test (tweak dylib từ artifact CI):
+   ```sh
+   py -3 tools\myjb_build.py --in test_tweak.dylib --out test.myjb \
+     --id com.wmua1.myjb.e2e --target-jb any --filter SpringBoard \
+     --seed-hex 9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60 \
+     --kdev-hex <hex bước 2>
+   ```
+   (seed trên là DEV RFC 8032 test #1 — khớp pubkey đang nhúng trong loader; đổi seed
+   riêng trước khi phát hành — mục B4.)
+4. Chép `test.myjb` vào `/var/mobile/Library/MyJB/containers/`.
+5. Respring: `sbreload` (nếu có) hoặc `killall -9 SpringBoard`.
+6. Kiểm tra kết quả:
+   - `/var/mobile/Library/MyJB/e2e_ok` xuất hiện (payload đã được decrypt + dlopen) ✅
+   - Log chi tiết: `launchctl setenv MYJB_DEBUG 1` trước khi respring → `/var/mobile/Library/MyJB/loader.log`.

@@ -25,6 +25,9 @@ cp -R "$ROOT/var" "$STAGE/"
 cp "$ROOT/DEBIAN/postinst" "$STAGE/DEBIAN/postinst"
 chmod 755 "$STAGE/DEBIAN/postinst"
 
+cp "$ROOT/DEBIAN/prerm" "$STAGE/DEBIAN/prerm"
+chmod 755 "$STAGE/DEBIAN/prerm"
+
 sed "s/^Version: .*/Version: $VERSION/" "$ROOT/DEBIAN/control" > "$STAGE/DEBIAN/control"
 chmod 644 "$STAGE/DEBIAN/control"
 

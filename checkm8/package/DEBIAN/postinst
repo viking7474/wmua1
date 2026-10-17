@@ -21,6 +21,20 @@ else
 fi
 chmod 644 "/var/mobile/Library/MyJB/kdev.txt"
 
+# Rootful bootstraps (checkra1n 12-14) do not read /var/jb: mirror the loader
+# into every injection directory that exists on this device.
+SRC_DYLIB="/var/jb/usr/lib/TweakInject/myjb_loader.dylib"
+SRC_PLIST="/var/jb/usr/lib/TweakInject/myjb_loader.plist"
+for d in "/Library/MobileSubstrate/DynamicLibraries" "/usr/lib/TweakInject"; do
+    if [ -d "$d" ]; then
+        cp -f "$SRC_DYLIB" "$SRC_PLIST" "$d/"
+        chmod 755 "$d/myjb_loader.dylib"
+        chmod 644 "$d/myjb_loader.plist"
+        echo "[myjb] loader installed into $d (rootful)"
+    fi
+done
+
 echo "[myjb] install ok; kdev hex: cat /var/mobile/Library/MyJB/kdev.txt"
-echo "[myjb] respring (sbreload) to activate"
+echo "[myjb] copy that hex to the PC (--kdev-hex), then delete kdev.txt"
+echo "[myjb] respring (sbreload or killall SpringBoard) to activate"
 exit 0

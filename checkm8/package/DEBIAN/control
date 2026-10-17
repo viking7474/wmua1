@@ -2,13 +2,15 @@ Package: com.wmua1.myjb.checkm8
 Name: myJB Loader (checkm8)
 Version: 1.0.0
 Architecture: iphoneos-arm64
-Description: myJB container loader (checkm8/palera1n)
- Installs myjb_loader.dylib into ElleKit's TweakInject directory so that
- .myjb containers are decrypted and loaded in every process. Creates the
- container/staging directories and generates the device key (kdev).
+Description: myJB container loader (checkm8: palera1n 15+, checkra1n 12-14)
+ Installs myjb_loader.dylib into the tweak injection directory (ElleKit
+ /var/jb rootless, or /Library/MobileSubstrate/DynamicLibraries and
+ /usr/lib/TweakInject on rootful bootstrap like checkra1n 0.12.4b), so
+ that .myjb containers are decrypted and loaded in every process. Creates
+ the container/staging directories and generates the device key (kdev).
  Respring after installing.
 Maintainer: wmua1
 Author: wmua1
 Section: Tweaks
-Depends: firmware (>= 15.0)
+Depends: firmware (>= 12.0)
 Tag: purpose::extension

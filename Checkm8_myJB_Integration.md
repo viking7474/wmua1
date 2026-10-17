@@ -103,10 +103,10 @@ với tool chạy Windows, dựa trên 2 repo bạn đưa + palera1n (nguồn pa
 | C1 | Tool Windows | `checkm8/ktool/` (fork openra1n) | ✅ scaffold xong: giữ gaster+libusb, `boot.py` port sang C (`pongo_send_cmd`/`pongo_upload`/`pongo_run_palera1n`), binary `myjb_ktool`; CI `build-checkm8.yml` (mingw + linux) — **Windows ✅** (exe mingw), **Linux ❌** (đang điều tra) |
 | C2 | Payload pin | build script/CI | tải `checkra1n-kpf-pongo`, `ramdisk.dmg`, `binpack.dmg`, `Pongo.bin` từ CDN + checksum; không commit binary; Pongo build từ palera1n/PongoOS (MIT) nếu cần |
 | C3 | Driver layer | tool | checkm8 cần USB Reset thật **và** hủy control transfer đúng timing (từ stage 2): dùng **libusbK** qua Zadig (đổi driver cho cả DFU 1227 lẫn Pongo 4141). WinUSB không reset được device; **UsbDk ❌** — backend usbdk của libusb 1.0.27 có `cancel_transfer = NULL`, đã kiểm chứng thực tế: treo ngay sau "Setting up the exploit". Gộp "Fix Driver" như WinRa1n 2.x |
-| C4 | Loader trên bootstrap | deb myJB → `/var/jb/usr/lib/TweakInject/myjb_loader.dylib` + `.plist` | ✅ v1: `checkm8/package/` (control, postinst, plist filter rỗng, `build.sh`) + loader fallback khi thiếu jbserver; CI `build.yml` đóng gói deb từ artifact `myjb_loader.dylib` (upload `myjb-checkm8`) |
+| C4 | Loader trên bootstrap | deb myJB → `/var/jb/usr/lib/TweakInject/myjb_loader.dylib` + `.plist` | ✅ v1: `checkm8/package/` (control, postinst + prerm, plist filter rỗng, `build.sh`); **postinst mirror rootful** vào `/Library/MobileSubstrate/DynamicLibraries` (Cydia Substrate) + `/usr/lib/TweakInject` (libhooker/odysseyra1n) khi thư mục tồn tại; loader fallback khi thiếu jbserver; CI `build.yml` đóng gói deb (artifact `myjb-checkm8`) + tweak E2E (`myjb-e2e-testtweak`) |
 | C5 | kdev service | postinst deb (v1) + myjbd (v2) | 🟡 v1: postinst sinh 32B `/var/mobile/Library/MyJB/kdev` (chmod 600, chown mobile) + `kdev.txt` (hex) để copy sang tool; v2: myjbd `myjbctl kdev` đăng ký per-device + KPF secret RAM |
 | C6 | myjbd daemon | `/var/jb/Library/LaunchDaemons/` | server-side OTA container, `/activate`, revoke; chuẩn hoá XPC `com.staturnz.jbserver` (dùng lại HMAC challenge code của Amethyst) |
-| C7 | iOS 12–14 | nhánh riêng (sau) | dùng payload `legacy_kpf`/`legacy_ramdisk` (ra1npoc headers) + Pongo 2.6.1; bootstrap checkra1n/odysseyra1n (libhooker path đã có trong loader) |
+| C7 | iOS 12–14 | nhánh riêng | ✅ `myjb_ktool --legacy` (payload `legacy_kpf`/`legacy_ramdisk` từ ra1npoc, `kpf_flags`, wValue 0xffff) — **verified máy thật iPhone 6s iOS 13.5.1**: kernel boot + loader checkra1n. Lưu ý: chuỗi palera1n **không chạy được < 15** — jbinit (plooshInit) cần `mount("tmpfs","/cores")`, kernel 13.5.1 không có tmpfs → `err=19 ENODEV` (strings "cannot mount tmpfs onto /cores" nằm trong `ramdisk.bin` beta8). Bootstrap: Cydia/odysseyra1n rootful |
 | C8 | Windows UX | tool | DFU helper (như palera1n -D), log file, tiến trình %, chạy lại nhanh |
 | C9 | CI | `.github/workflows/` | 🟡 `build-checkm8.yml` mingw xanh, linux đỏ (đang điều tra); `build.yml` (macOS) thêm bước đóng gói deb checkm8 (`checkm8/package/build.sh`) → artifact `myjb-checkm8` |
 | C10 | Test matrix | thiết bị | 15.0–15.8 (A11/A10/A9) × rootless; 12–14 (A8–A11) sau |
@@ -123,13 +123,15 @@ với tool chạy Windows, dựa trên 2 repo bạn đưa + palera1n (nguồn pa
 ## 5. Việc kế tiếp (theo thứ tự)
 
 1. ✅ `checkm8/ktool/` scaffold + CI `build-checkm8.yml` **xanh** (myjb_ktool.exe + linux binary).
-2. Test máy thật: JB iOS 15 (A11) bằng tool (DFU → libusbK → chạy exe) → xác nhận boot
-   palera1n như openra1n gốc (parity check trước khi thêm myJB).
+2. 🟡 Máy thật: chuỗi gửi đã verified (13.5.1 `--legacy` boot tới checkra1n loader; mode
+   palera1n gửi hết chain trên 13.5.1 — treo sau bootx do tmpfs, xem C7). Còn cần: máy
+   A11/IOS 15 rootless để xác nhận boot palera1n đầy đủ.
 3. ✅ Loader bản checkm8: fallback khi vắng jbserver (`myjb_loader/src/main.c`) + deb
    `checkm8/package/` — loader → `/var/jb/usr/lib/TweakInject/` (kèm plist filter rỗng cho
-   ElleKit), postinst tạo dirs (0177 7) + sinh kdev, `build.sh` đóng gói (dùng chung
-   `myjb_loader.dylib` với Amethyst); CI artifact `myjb-checkm8`.
-4. Test container .myjb trên máy đã JB: cài deb qua Sileo (hoặc `dpkg -i` qua SSH dropbear
-   127.0.0.1:44) → respring → đặt `.myjb` vào containers + kdev → `MYJB_DEBUG=1` kiểm log.
-   Lưu ý: **không** bật `MYJB_LEGACY` trên checkm8 (ElleKit đã tự load tweak thường).
-5. V2: myjbd (C5/C6), rồi nhánh iOS 12–14 (C7).
+   ElleKit), postinst tạo dirs (0177 7) + sinh kdev + mirror rootful, `build.sh` đóng gói
+   (dùng chung `myjb_loader.dylib` với Amethyst); CI artifact `myjb-checkm8` + `myjb-e2e-testtweak`.
+4. **Kế tiếp**: E2E container trên máy 13.5.1 đã JB: cài deb → lấy `kdev.txt` → build
+   `test.myjb` với `myjb_build.py` (DEV seed + `--kdev-hex`) → đặt vào containers →
+   respring → xác nhận `/var/mobile/Library/MyJB/e2e_ok` (các bước chi tiết: guide mục I).
+   Lưu ý: **không** bật `MYJB_LEGACY` trên checkm8 (bootstrap tự load tweak thường).
+5. V2: myjbd (C5/C6). C7 (12–14) ✅ đã tích hợp `--legacy` vào ktool.
