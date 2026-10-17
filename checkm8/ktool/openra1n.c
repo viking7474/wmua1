@@ -1225,12 +1225,111 @@ gaster_checkm8(usb_handle_t *handle) {
 	return stage == STAGE_PWNED;
 }
 
+#define PONGO_CTRL_TIMEOUT_MS 5000
+
+static bool
+pongo_ctrl_request(const usb_handle_t *handle, uint8_t bm_request_type, uint8_t b_request, uint16_t w_value, uint16_t w_index, void *p_data, size_t w_len, transfer_ret_t *transfer_ret) {
+#ifdef HAVE_LIBUSB
+	int ret = libusb_control_transfer(handle->device, bm_request_type, b_request, w_value, w_index, p_data, (uint16_t)w_len, PONGO_CTRL_TIMEOUT_MS);
+
+	if(transfer_ret != NULL) {
+		if(ret >= 0) {
+			transfer_ret->sz = (uint32_t)ret;
+			transfer_ret->ret = USB_TRANSFER_OK;
+		} else if(ret == LIBUSB_ERROR_PIPE) {
+			transfer_ret->ret = USB_TRANSFER_STALL;
+		} else {
+			transfer_ret->ret = USB_TRANSFER_ERROR;
+		}
+	}
+	return true;
+#else
+	/* macOS IOKit branch: reuse the generic path (the xfer timeout there is
+	 * driven by usb_timeout; the libusb backends are the supported ones). */
+	return send_usb_control_request(handle, bm_request_type, b_request, w_value, w_index, p_data, w_len, transfer_ret);
+#endif
+}
+
+static void
+log_pongo_output(const unsigned char *buf, unsigned len) {
+	char line[512];
+	unsigned i, o = 0;
+
+	for(i = 0; i < len; ++i) {
+		unsigned char c = buf[i];
+
+		if(c == '\n' || c == '\r') {
+			if(o > 0) {
+				line[o] = '\0';
+				LOG_DEBUG("pongoOS: %s", line);
+				o = 0;
+			}
+		} else if(o < sizeof(line) - 1) {
+			line[o++] = (c >= 0x20 && c < 0x7F) ? (char)c : '.';
+		}
+	}
+	if(o > 0) {
+		line[o] = '\0';
+		LOG_DEBUG("pongoOS: %s", line);
+	}
+}
+
 static bool
 pongo_send_cmd(const usb_handle_t *handle, const char *cmd) {
 	transfer_ret_t transfer_ret;
+	uint8_t in_progress = 1;
+	unsigned char out_buf[0x1000];
+	bool is_boot_cmd = cmd != NULL && strncmp(cmd, "boot", 4) == 0;
 
-	send_usb_control_request(handle, 0x21, 4, 0, 0, NULL, 0, &transfer_ret);
-	return send_usb_control_request(handle, 0x21, 3, 0, 0, (void *)cmd, strlen(cmd), &transfer_ret) && transfer_ret.ret == USB_TRANSFER_OK;
+	if(cmd != NULL) {
+		/* wValue=1 makes PongoOS hold all stdout until we drain it
+		 * (usbloader.c: "make writes to stdout stall until async
+		 * check-in"), which is what makes the completion wait below
+		 * race-free. Same sequence as palera1n's terminal. */
+		if(!pongo_ctrl_request(handle, 0x21, 4, 1, 0, NULL, 0, &transfer_ret) || transfer_ret.ret != USB_TRANSFER_OK) {
+			if(is_boot_cmd) {
+				return true;
+			}
+			LOG_ERROR("failed to arm the PongoOS stdout buffering before: %s", cmd);
+			return false;
+		}
+		if(!pongo_ctrl_request(handle, 0x21, 3, 0, 0, (void *)cmd, strlen(cmd), &transfer_ret) || transfer_ret.ret != USB_TRANSFER_OK) {
+			if(is_boot_cmd) {
+				return true;
+			}
+			LOG_ERROR("failed to send command to PongoOS: %s", cmd);
+			return false;
+		}
+	}
+
+	/* Wait until PongoOS finished executing the command: 0xa1,2 returns
+	 * command_in_progress, 0xa1,1 drains the command output. This is
+	 * required for the boot chain: e.g. the ramdisk upload must not start
+	 * before modload has actually loaded the KPF, and the device stalls
+	 * EP0/EP2 otherwise. Output is logged as "pongoOS: ..." lines. */
+	while(in_progress) {
+		if(!pongo_ctrl_request(handle, 0xa1, 2, 0, 0, &in_progress, 1, &transfer_ret) || transfer_ret.ret != USB_TRANSFER_OK || transfer_ret.sz != 1) {
+			if(is_boot_cmd) {
+				return true;
+			}
+			LOG_ERROR("PongoOS stopped responding while running: %s", cmd != NULL ? cmd : "(draining boot output)");
+			return false;
+		}
+		if(!pongo_ctrl_request(handle, 0xa1, 1, 0, 0, out_buf, sizeof(out_buf), &transfer_ret) || transfer_ret.ret != USB_TRANSFER_OK) {
+			if(is_boot_cmd) {
+				return true;
+			}
+			LOG_ERROR("failed to read PongoOS output while running: %s", cmd != NULL ? cmd : "(draining boot output)");
+			return false;
+		}
+		if(transfer_ret.sz > 0) {
+			log_pongo_output(out_buf, (unsigned)transfer_ret.sz);
+		}
+	}
+	if(cmd != NULL) {
+		LOG_DEBUG("PongoOS command completed: %s", cmd);
+	}
+	return true;
 }
 
 static bool
@@ -1238,7 +1337,10 @@ pongo_upload(const usb_handle_t *handle, const uint8_t *data, unsigned size) {
 	transfer_ret_t transfer_ret;
 	uint32_t file_size = (uint32_t)size;
 
-	send_usb_control_request(handle, 0x21, 2, 0, 0, NULL, 0, &transfer_ret);
+	/* PongoOS request 0x21,1 with a 4-byte payload = "resize the loader
+	 * buffer to N bytes and arm the EP2 bulk OUT DMA" (see usbloader.c,
+	 * reallocate_loader_xfer_data). Same order as palera1n: the file is
+	 * uploaded first and the command that consumes it is sent after. */
 	if(!send_usb_control_request(handle, 0x21, 1, 0, 0, &file_size, sizeof(file_size), &transfer_ret) || transfer_ret.ret != USB_TRANSFER_OK) {
 		LOG_ERROR("Failed to announce payload size to PongoOS");
 		return false;
@@ -1276,7 +1378,9 @@ pongo_upload(const usb_handle_t *handle, const uint8_t *data, unsigned size) {
 	return false;
 #endif
 
-	send_usb_control_request(handle, 0x21, 4, 0, 0, NULL, 0, &transfer_ret);
+	/* No trailing reset request here: the next pongo_send_cmd sends the
+	 * 0x21,4 wValue=1 that arms stdout buffering for its command. */
+	LOG_DEBUG("uploaded %u bytes to PongoOS", size);
 	return true;
 }
 
@@ -1302,26 +1406,27 @@ pongo_run_palera1n(usb_handle_t *handle) {
 #endif
 
 	LOG_INFO("PongoOS connected, sending patching sequence");
-	pongo_send_cmd(handle, "fuse lock\n");
-	pongo_send_cmd(handle, "sep auto\n");
+	if(!pongo_send_cmd(handle, NULL)) return false;
+	if(!pongo_send_cmd(handle, "fuse lock\n")) return false;
+	if(!pongo_send_cmd(handle, "sep auto\n")) return false;
 
-	LOG_INFO("Uploading KPF (checkra1n-kpf-ploosh)");
+	LOG_INFO("Uploading KPF (checkra1n-kpf-ploosh, %u bytes)", payloads_checkra1n_kpf_ploosh_bin_len);
 	if(!pongo_upload(handle, payloads_checkra1n_kpf_ploosh_bin, payloads_checkra1n_kpf_ploosh_bin_len)) return false;
-	pongo_send_cmd(handle, "modload\n");
+	if(!pongo_send_cmd(handle, "modload\n")) return false;
 
-	pongo_send_cmd(handle, "palera1n_flags 0x4000000\n");
+	if(!pongo_send_cmd(handle, "palera1n_flags 0x4000000\n")) return false;
 
-	LOG_INFO("Uploading ramdisk");
+	LOG_INFO("Uploading ramdisk (%u bytes)", payloads_ramdisk_bin_len);
 	if(!pongo_upload(handle, payloads_ramdisk_bin, payloads_ramdisk_bin_len)) return false;
-	pongo_send_cmd(handle, "ramdisk\n");
+	if(!pongo_send_cmd(handle, "ramdisk\n")) return false;
 
-	LOG_INFO("Uploading overlay (binpack)");
+	LOG_INFO("Uploading overlay (binpack, %u bytes)", payloads_overlay_bin_len);
 	if(!pongo_upload(handle, payloads_overlay_bin, payloads_overlay_bin_len)) return false;
-	pongo_send_cmd(handle, "overlay\n");
+	if(!pongo_send_cmd(handle, "overlay\n")) return false;
 
 	LOG_INFO("Booting kernel (rootdev=md0)");
-	pongo_send_cmd(handle, "xargs  rootdev=md0\n");
-	pongo_send_cmd(handle, "bootx\n");
+	if(!pongo_send_cmd(handle, "xargs  rootdev=md0\n")) return false;
+	if(!pongo_send_cmd(handle, "bootx\n")) return false;
 	return true;
 }
 
