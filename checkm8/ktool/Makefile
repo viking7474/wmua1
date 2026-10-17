@@ -17,7 +17,7 @@ ifdef WINDOWS_CROSS
 	CC = x86_64-w64-mingw32-gcc
 	STRIP = x86_64-w64-mingw32-strip
 	CFLAGS += -DHAVE_LIBUSB -D_WIN32_WINNT=0x0601 -I$(LIBUSB_MINGW)/include
-	LDFLAGS += -L$(LIBUSB_MINGW)/MinGW64/static -lusb-1.0 -lsetupapi -lole32 -static -static-libgcc
+	LDFLAGS += -L$(LIBUSB_MINGW)/MinGW64/static -lusb-1.0 -lsetupapi -lcfgmgr32 -lwinusb -lole32 -luuid -static -static-libgcc
 else ifeq ($(LIBUSB),1)
 	CC = gcc
 	CFLAGS += -DHAVE_LIBUSB

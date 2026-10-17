@@ -15,16 +15,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install MinGW + 7z
+      - name: Install MinGW + 7z + xxd
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64-x86-64 p7zip-full
+          sudo apt-get install -y gcc-mingw-w64-x86-64 p7zip-full xxd
           x86_64-w64-mingw32-gcc --version | head -n 1
 
       - name: Fetch libusb (MinGW static)
         run: |
           curl -fsSL -o libusb.7z https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.7z
           7z x -olibusb libusb.7z >/dev/null
+          mkdir -p libusb/include/libusb-1.0
+          mv libusb/include/libusb.h libusb/include/libusb-1.0/libusb.h
           ls libusb/MinGW64/static
           ls libusb/include/libusb-1.0
 
