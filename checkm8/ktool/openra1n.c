@@ -104,6 +104,10 @@ extern uint8_t payloads_overlay_bin[];
 extern unsigned payloads_overlay_bin_len;
 extern uint8_t payloads_ramdisk_bin[];
 extern unsigned payloads_ramdisk_bin_len;
+extern uint8_t payloads_legacy_kpf_bin[];
+extern unsigned payloads_legacy_kpf_bin_len;
+extern uint8_t payloads_legacy_ramdisk_bin[];
+extern unsigned payloads_legacy_ramdisk_bin_len;
 
 #include <payloads/yolo_s8000.bin.h>
 #include <payloads/yolo_s8001.bin.h>
@@ -121,6 +125,20 @@ extern unsigned payloads_ramdisk_bin_len;
 #include <payloads/overlay.bin.h>
 #include <payloads/ramdisk.bin.h>
 #include <payloads/checkra1n-kpf-ploosh.bin.h>
+
+#include <payloads/legacy_kpf.bin.h>
+#include <payloads/legacy_ramdisk.bin.h>
+
+/* PongoOS request 0x21,4 wValue used at the start of every command. The
+ * value only selects the stdout behavior: 1 = blocking (palera1n's terminal),
+ * 0xffff = reset (ra1npoc/checkra1n's terminal). The completion wait in
+ * pongo_send_cmd() drains stdout either way. */
+#define PONGO_RESET_PALERA1N 1
+#define PONGO_RESET_LEGACY 0xffff
+
+/* kpf_flags bit sent by the legacy (checkra1n 0.12.4b) chain for -v boot
+ * (ra1npoc's common.h: old_checkrain_option_verbose_boot = 1 << 1). */
+#define LEGACY_KPF_FLAG_VERBOSE_BOOT 0x2
 
 static uint16_t cpid;
 static uint32_t payload_dest_armv7;
@@ -1275,18 +1293,19 @@ log_pongo_output(const unsigned char *buf, unsigned len) {
 }
 
 static bool
-pongo_send_cmd(const usb_handle_t *handle, const char *cmd) {
+pongo_send_cmd(const usb_handle_t *handle, const char *cmd, uint16_t reset_wvalue) {
 	transfer_ret_t transfer_ret;
 	uint8_t in_progress = 1;
 	unsigned char out_buf[0x1000];
 	bool is_boot_cmd = cmd != NULL && strncmp(cmd, "boot", 4) == 0;
 
 	if(cmd != NULL) {
-		/* wValue=1 makes PongoOS hold all stdout until we drain it
-		 * (usbloader.c: "make writes to stdout stall until async
-		 * check-in"), which is what makes the completion wait below
-		 * race-free. Same sequence as palera1n's terminal. */
-		if(!pongo_ctrl_request(handle, 0x21, 4, 1, 0, NULL, 0, &transfer_ret) || transfer_ret.ret != USB_TRANSFER_OK) {
+		/* The 0x21,4 reset arms stdout handling for the command that
+		 * follows (wValue 1 = blocking stdout, usbloader.c: "make
+		 * writes to stdout stall until async check-in"), which is what
+		 * makes the completion wait below race-free. wValue differs
+		 * between palera1n (1) and checkra1n/ra1npoc (0xffff). */
+		if(!pongo_ctrl_request(handle, 0x21, 4, reset_wvalue, 0, NULL, 0, &transfer_ret) || transfer_ret.ret != USB_TRANSFER_OK) {
 			if(is_boot_cmd) {
 				return true;
 			}
@@ -1379,13 +1398,13 @@ pongo_upload(const usb_handle_t *handle, const uint8_t *data, unsigned size) {
 #endif
 
 	/* No trailing reset request here: the next pongo_send_cmd sends the
-	 * 0x21,4 wValue=1 that arms stdout buffering for its command. */
+	 * 0x21,4 reset that arms stdout buffering for its command. */
 	LOG_DEBUG("uploaded %u bytes to PongoOS", size);
 	return true;
 }
 
 static bool
-pongo_run_palera1n(usb_handle_t *handle) {
+pongo_wait_and_claim(usb_handle_t *handle) {
 	LOG_INFO("Waiting for PongoOS device (USB PID 0x4141)");
 	init_usb_handle(handle, APPLE_VID, PONGO_MODE_PID);
 	wait_usb_handle(handle, NULL, NULL);
@@ -1404,29 +1423,66 @@ pongo_run_palera1n(usb_handle_t *handle) {
 		LOG_DEBUG("claimed PongoOS interface 0");
 	}
 #endif
+	return true;
+}
+
+static bool
+pongo_run_palera1n(usb_handle_t *handle) {
+	if(!pongo_wait_and_claim(handle)) return false;
 
 	LOG_INFO("PongoOS connected, sending patching sequence");
-	if(!pongo_send_cmd(handle, NULL)) return false;
-	if(!pongo_send_cmd(handle, "fuse lock\n")) return false;
-	if(!pongo_send_cmd(handle, "sep auto\n")) return false;
+	if(!pongo_send_cmd(handle, NULL, PONGO_RESET_PALERA1N)) return false;
+	if(!pongo_send_cmd(handle, "fuse lock\n", PONGO_RESET_PALERA1N)) return false;
+	if(!pongo_send_cmd(handle, "sep auto\n", PONGO_RESET_PALERA1N)) return false;
 
 	LOG_INFO("Uploading KPF (checkra1n-kpf-ploosh, %u bytes)", payloads_checkra1n_kpf_ploosh_bin_len);
 	if(!pongo_upload(handle, payloads_checkra1n_kpf_ploosh_bin, payloads_checkra1n_kpf_ploosh_bin_len)) return false;
-	if(!pongo_send_cmd(handle, "modload\n")) return false;
+	if(!pongo_send_cmd(handle, "modload\n", PONGO_RESET_PALERA1N)) return false;
 
-	if(!pongo_send_cmd(handle, "palera1n_flags 0x4000000\n")) return false;
+	if(!pongo_send_cmd(handle, "palera1n_flags 0x4000000\n", PONGO_RESET_PALERA1N)) return false;
 
 	LOG_INFO("Uploading ramdisk (%u bytes)", payloads_ramdisk_bin_len);
 	if(!pongo_upload(handle, payloads_ramdisk_bin, payloads_ramdisk_bin_len)) return false;
-	if(!pongo_send_cmd(handle, "ramdisk\n")) return false;
+	if(!pongo_send_cmd(handle, "ramdisk\n", PONGO_RESET_PALERA1N)) return false;
 
 	LOG_INFO("Uploading overlay (binpack, %u bytes)", payloads_overlay_bin_len);
 	if(!pongo_upload(handle, payloads_overlay_bin, payloads_overlay_bin_len)) return false;
-	if(!pongo_send_cmd(handle, "overlay\n")) return false;
+	if(!pongo_send_cmd(handle, "overlay\n", PONGO_RESET_PALERA1N)) return false;
 
 	LOG_INFO("Booting kernel (rootdev=md0)");
-	if(!pongo_send_cmd(handle, "xargs  rootdev=md0\n")) return false;
-	if(!pongo_send_cmd(handle, "bootx\n")) return false;
+	if(!pongo_send_cmd(handle, "xargs  rootdev=md0\n", PONGO_RESET_PALERA1N)) return false;
+	if(!pongo_send_cmd(handle, "bootx\n", PONGO_RESET_PALERA1N)) return false;
+	return true;
+}
+
+static bool
+pongo_run_legacy(usb_handle_t *handle, bool verbose_boot) {
+	char kpf_flags_cmd[32];
+
+	if(!pongo_wait_and_claim(handle)) return false;
+
+	/* checkra1n 0.12.4b boot chain (iOS 12.0 - 14.8.1), same order as
+	 * ra1npoc's legacy terminal: no palera1n_flags and no overlay; the
+	 * checkra1n loader/app rides in the boot ramdisk instead. */
+	LOG_INFO("PongoOS connected, sending checkra1n patching sequence (legacy mode)");
+	if(!pongo_send_cmd(handle, NULL, PONGO_RESET_LEGACY)) return false;
+	if(!pongo_send_cmd(handle, "fuse lock\n", PONGO_RESET_LEGACY)) return false;
+	if(!pongo_send_cmd(handle, "sep auto\n", PONGO_RESET_LEGACY)) return false;
+
+	LOG_INFO("Uploading legacy KPF (checkra1n 0.12.4b, %u bytes)", payloads_legacy_kpf_bin_len);
+	if(!pongo_upload(handle, payloads_legacy_kpf_bin, payloads_legacy_kpf_bin_len)) return false;
+	if(!pongo_send_cmd(handle, "modload\n", PONGO_RESET_LEGACY)) return false;
+
+	LOG_INFO("Uploading legacy ramdisk (checkra1n 0.12.4b loader, %u bytes)", payloads_legacy_ramdisk_bin_len);
+	if(!pongo_upload(handle, payloads_legacy_ramdisk_bin, payloads_legacy_ramdisk_bin_len)) return false;
+	if(!pongo_send_cmd(handle, "ramdisk\n", PONGO_RESET_LEGACY)) return false;
+
+	snprintf(kpf_flags_cmd, sizeof(kpf_flags_cmd), "kpf_flags 0x%08x\n", verbose_boot ? LEGACY_KPF_FLAG_VERBOSE_BOOT : 0);
+	if(!pongo_send_cmd(handle, kpf_flags_cmd, PONGO_RESET_LEGACY)) return false;
+
+	LOG_INFO("Booting kernel (rootdev=md0%s)", verbose_boot ? ", verbose" : "");
+	if(!pongo_send_cmd(handle, verbose_boot ? "xargs -v rootdev=md0\n" : "xargs rootdev=md0\n", PONGO_RESET_LEGACY)) return false;
+	if(!pongo_send_cmd(handle, "bootx\n", PONGO_RESET_LEGACY)) return false;
 	return true;
 }
 
@@ -1458,8 +1514,23 @@ pause_if_own_console(void) {
 #endif
 
 int main(int argc, char **argv) {
-	(void)argc;
-	(void)argv;
+	bool legacy_mode = false, verbose_boot = false;
+	int i;
+
+	for(i = 1; i < argc; ++i) {
+		if(!strcmp(argv[i], "--legacy") || !strcmp(argv[i], "-l")) {
+			legacy_mode = true;
+		} else if(!strcmp(argv[i], "--legacy-verbose") || !strcmp(argv[i], "-L")) {
+			legacy_mode = true;
+			verbose_boot = true;
+		} else {
+			printf("usage: %s [--legacy|-l] [--legacy-verbose|-L]\n", argv[0]);
+			printf("  default: palera1n boot chain (iOS 15.0+)\n");
+			printf("  --legacy: checkra1n 0.12.4b boot chain (iOS 12.0 - 14.8.1)\n");
+			printf("  --legacy-verbose: same as --legacy with verbose boot (-v)\n");
+			return EXIT_FAILURE;
+		}
+	}
 
 	myjb_log_init();
 #if defined(_WIN32) || defined(WIN32)
@@ -1489,7 +1560,8 @@ int main(int argc, char **argv) {
 
 	sleep_ms(3000);
 	checkm8_boot_pongo(&handle);
-	if(!pongo_run_palera1n(&handle)) {
+
+	if(legacy_mode ? !pongo_run_legacy(&handle, verbose_boot) : !pongo_run_palera1n(&handle)) {
 		LOG_ERROR("Boot chain was not sent completely (see the error above); the device is still sitting in PongoOS. Re-enter DFU and run the tool again");
 		myjb_log_exit(EXIT_FAILURE);
 #if defined(_WIN32) || defined(WIN32)
@@ -1498,7 +1570,11 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
-	LOG_INFO("Boot chain sent; device should now boot jailbroken (palera1n boot).");
+	if(legacy_mode) {
+		LOG_INFO("Boot chain sent; device should now boot checkra1n-jailbroken (legacy boot).");
+	} else {
+		LOG_INFO("Boot chain sent; device should now boot jailbroken (palera1n boot).");
+	}
 	myjb_log_exit(EXIT_SUCCESS);
 	return EXIT_SUCCESS;
 }

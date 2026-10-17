@@ -6,13 +6,17 @@ Khác biệt so với openra1n gốc:
 - **Gộp `boot.py` vào binary C** — không cần chạy python3 riêng sau khi pwn:
   sau khi boot PongoOS, tool tự gửi chuỗi palera1n (`fuse lock`, `sep auto`,
   `modload` KPF, `palera1n_flags`, `ramdisk`, `overlay`, `xargs rootdev=md0`, `bootx`).
+- **Chế độ `--legacy`** — chuỗi checkra1n 0.12.4b cho iOS 12.0–14.8.1
+  (KPF legacy + ramdisk loader, `kpf_flags`, không overlay), theo đúng flow
+  `pongoterm.c` của ra1npoc15.
 - Binary tên `myjb_ktool(.exe)`, build Windows bằng MinGW trong CI.
 
 ## Trạng thái
 
 - [x] checkm8 (gaster) + boot PongoOS + chuỗi palera1n trong 1 binary
+- [x] Chuỗi legacy checkra1n 0.12.4b (`--legacy`) — chờ test trên máy iOS 12–14
 - [ ] Tích hợp myJB (loader/kdev) — xem `../../Checkm8_myJB_Integration.md` (C4–C6)
-- [ ] Payload pin + checksum (C2); nhánh iOS 12–14 (C7)
+- [ ] Payload pin + checksum (C2)
 
 ## Usage (Windows)
 
@@ -27,15 +31,20 @@ Khác biệt so với openra1n gốc:
      control transfer đúng thời điểm từ stage 2 trở đi → tool đứng im ngay sau
      "Setting up the exploit". UsbDk reset thật nhưng thiếu cancel.
 2. Chạy `myjb_ktool.exe` — tool tự chạy checkm8, boot PongoOS, và gửi chuỗi boot palera1n.
+   - iOS 15+: chạy mặc định (palera1n boot).
+   - iOS 12.0–14.8.1: chạy `myjb_ktool.exe --legacy` (checkra1n 0.12.4b boot);
+     thêm `-L`/`--legacy-verbose` nếu cần verbose boot (màn hình hiện log -v).
+     Máy clean sẽ tự boot vào loader checkra1n trên ramdisk (mở app "checkra1n"
+     để cài bootstrap/Sileo như bình thường).
 3. Khi tool báo đã gửi xong, thiết bị re-enumerate "Pongo USB Device" (05AC 4141):
    cài driver **libusbK** cho nó bằng Zadig.
    Mẹo: khi tool đang ở "Waiting for PongoOS device", chỉ cần mở Zadig →
    "Pongo USB Device" → Replace Driver → libusbK; tool đang chờ sẽ tự mở được
    thiết bị ngay, không phải chạy lại từ đầu.
-4. Thiết bị boot vào jailbreak (palera1n rootless `/var/jb`). Cài bootstrap như bình thường.
+4. Thiết bị boot vào jailbreak (palera1n rootless `/var/jb`, hoặc checkra1n loader
+   với `--legacy`). Cài bootstrap như bình thường.
 
 > Lưu ý: checkm8 là semi-tethered — mỗi lần reboot phải chạy lại tool.
-> iOS 15+ chỉ hỗ trợ chạy theo flow này; iOS 12–14 sẽ bổ sung sau (nhánh ra1npoc/legacy).
 
 ## Debug log (khi cửa sổ tự đóng)
 
@@ -63,11 +72,14 @@ make LIBUSB=1
 make
 ```
 
-## Payloads (dump từ palera1n v2.0.0 beta 8)
+## Payloads
 
 - `pongoOS_shellcode.bin` (+ `shellcode.bin`, `Pongo.bin`) — PongoOS
-- `checkra1n-kpf-ploosh.bin` — KPF của checkra1n build cho PongoOS
-- `ramdisk.bin`, `overlay.bin` (binpack) — bootstrap palera1n
+- `checkra1n-kpf-ploosh.bin` — KPF của checkra1n build cho PongoOS (dump từ palera1n v2.0.0 beta 8)
+- `ramdisk.bin`, `overlay.bin` (binpack) — bootstrap palera1n (iOS 15+)
+- `legacy_kpf.bin`, `legacy_ramdisk.bin` — KPF + ramdisk loader gốc
+  checkra1n 0.12.4b (nguồn: kho `headers/` của
+  [ra1npoc15](https://github.com/kok3shidoll/ra1npoc)) — dùng cho `--legacy` (iOS 12–14)
 - `yolo_*.bin` — stage-2 checkm8 per-chip
 
 Kế hoạch: chuyển sang tải artifact có pin + checksum trong CI (như palera1n làm),
