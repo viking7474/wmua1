@@ -252,7 +252,8 @@ Cùng builder + cùng container v1; chỉ khác cách cài loader và engine:
 
 - **Cài loader**: deb `com.wmua1.myjb.checkm8` (nguồn `checkm8/package/`, CI `build.yml`
   → artifact `myjb-checkm8`). Deb đặt `myjb_loader.dylib` + `myjb_loader.plist` (filter rỗng)
-  vào `/var/jb/usr/lib/TweakInject/` — ElleKit tự inject vào mọi process.
+  vào `/var/jb/usr/lib/TweakInject/` — ElleKit tự inject vào mọi process. (Rootful thì
+  postinst ghi plist riêng có `Bundles` tường minh — xem mục I.)
 - **Điều kiện**: JB bằng `myjb_ktool` (hoặc palera1n tương đương) — bootstrap có ElleKit.
   Engine hook = ElleKit (`MSHookFunction` có sẵn; loader không cần tải libhooker).
 - **kdev**: postinst sinh `/var/mobile/Library/MyJB/kdev` + hex ở `.../kdev.txt`
@@ -273,6 +274,13 @@ JB bằng `myjb_ktool.exe --legacy` (chuỗi checkra1n 0.12.4b). Bootstrap check
 (Cydia hoặc odysseyra1n): engine hook do Substrate/libhooker của bootstrap cấp;
 postinst tự mirror loader vào `/Library/MobileSubstrate/DynamicLibraries` (Cydia
 Substrate) và/hoặc `/usr/lib/TweakInject` (libhooker) — thư mục nào tồn tại.
+
+**Lưu ý filter (đã kiểm chứng trên 13.5.1):** Cydia Substrate classic **không** coi
+`Filter` rỗng là "mọi process" — loader sẽ không được inject (im lặng, không log).
+Postinst ghi plist rootful với `Bundles` tường minh:
+`com.apple.springboard`, `com.apple.Security`, `com.apple.UIKit`, `com.apple.Foundation`.
+Nếu cài tay, phải dùng plist có `Bundles` (bản deb cũ dùng filter rỗng thì thay bằng
+mục Filter tương ứng rồi respring).
 
 E2E smoke test (đã có sẵn tweak test trong repo):
 
@@ -298,3 +306,12 @@ E2E smoke test (đã có sẵn tweak test trong repo):
 6. Kiểm tra kết quả:
    - `/var/mobile/Library/MyJB/e2e_ok` xuất hiện (payload đã được decrypt + dlopen) ✅
    - Log chi tiết: `launchctl setenv MYJB_DEBUG 1` trước khi respring → `/var/mobile/Library/MyJB/loader.log`.
+
+Kết quả đã verify trên iPhone 6s iOS 13.5.1 (checkra1n rootful) — `cat loader.log`:
+```
+myjb_loader: /System/Library/CoreServices/SpringBoard.app/SpringBoard: 1 container(s), 0 legacy, 1 key(s)
+myjb_loader: com.wmua1.myjb.e2e: trustcache/sign unavailable (9), loading anyway
+myjb_loader: com.wmua1.myjb.e2e: loaded
+```
+và `cat e2e_ok`: `myjb e2e payload loaded: pid=1877 proc=SpringBoard time=...`.
+(`trustcache/sign unavailable (9)` là bình thường — rootful không có jbserver.)
