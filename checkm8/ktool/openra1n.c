@@ -163,15 +163,28 @@ reset_usb_handle(const usb_handle_t *handle) {
 static bool
 wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 	if(libusb_init(NULL) == LIBUSB_SUCCESS) {
+		bool open_logged = false, cfg_fail_logged = false;
 		for(;;) {
 			if((handle->device = libusb_open_device_with_vid_pid(NULL, handle->vid, handle->pid)) != NULL) {
-				if(libusb_set_configuration(handle->device, 1) == LIBUSB_SUCCESS && (usb_check_cb == NULL || usb_check_cb(handle, arg))) {
+				if(!open_logged) {
+					open_logged = true;
+					LOG_INFO("USB device opened (VID 0x%04X PID 0x%04X)", handle->vid, handle->pid);
+				}
+				int cfg_ret = libusb_set_configuration(handle->device, 1);
+				if(cfg_ret != LIBUSB_SUCCESS) {
+					if(!cfg_fail_logged) {
+						cfg_fail_logged = true;
+						LOG_WARN("libusb_set_configuration(1) failed: %s", libusb_error_name(cfg_ret));
+					}
+				} else if(usb_check_cb == NULL || usb_check_cb(handle, arg)) {
 					return true;
 				}
 				libusb_close(handle->device);
 			}
 			sleep_ms(usb_timeout);
 		}
+	} else {
+		LOG_ERROR("libusb_init failed");
 	}
 	return false;
 }
@@ -473,6 +486,11 @@ checkm8_check_usb_device(usb_handle_t *handle, void *pwned) {
 	bool ret = false;
 
 	if(usb_serial_num != NULL) {
+		static char last_serial[UINT8_MAX];
+		if(strcmp(last_serial, usb_serial_num) != 0) {
+			snprintf(last_serial, sizeof(last_serial), "%s", usb_serial_num);
+			LOG_INFO("DFU serial: %s", usb_serial_num);
+		}
 		if(strstr(usb_serial_num, " SRTG:[iBoot-1145.3]") != NULL) {
 			cpid = 0x8950;
 			config_large_leak = 659;
@@ -766,8 +784,20 @@ checkm8_check_usb_device(usb_handle_t *handle, void *pwned) {
 		if(cpid != 0) {
 			*(bool *)pwned = strstr(usb_serial_num, pwnd_str) != NULL;
 			ret = true;
+		} else {
+			static bool unsupported_logged = false;
+			if(!unsupported_logged) {
+				unsupported_logged = true;
+				LOG_WARN("iBoot/SRTG not in payload table; this iOS/device combo is not supported yet");
+			}
 		}
 		free(usb_serial_num);
+	} else {
+		static bool serial_fail_logged = false;
+		if(!serial_fail_logged) {
+			serial_fail_logged = true;
+			LOG_WARN("DFU device present but serial read failed -> driver issue; replace DFU driver with WinUSB (Zadig)");
+		}
 	}
 	return ret;
 }
