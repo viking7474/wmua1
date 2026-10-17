@@ -100,15 +100,15 @@ với tool chạy Windows, dựa trên 2 repo bạn đưa + palera1n (nguồn pa
 
 | # | Điểm | Ở đâu | Việc |
 |---|------|-------|------|
-| C1 | Tool Windows | `checkm8/ktool/` (fork openra1n) | ✅ scaffold xong: giữ gaster+libusb, `boot.py` port sang C (`pongo_send_cmd`/`pongo_upload`/`pongo_run_palera1n`), binary `myjb_ktool`; CI `build-checkm8.yml` (mingw + linux) — **CI xanh** (win exe + linux) |
+| C1 | Tool Windows | `checkm8/ktool/` (fork openra1n) | ✅ scaffold xong: giữ gaster+libusb, `boot.py` port sang C (`pongo_send_cmd`/`pongo_upload`/`pongo_run_palera1n`), binary `myjb_ktool`; CI `build-checkm8.yml` (mingw + linux) — **Windows ✅** (exe mingw), **Linux ❌** (đang điều tra) |
 | C2 | Payload pin | build script/CI | tải `checkra1n-kpf-pongo`, `ramdisk.dmg`, `binpack.dmg`, `Pongo.bin` từ CDN + checksum; không commit binary; Pongo build từ palera1n/PongoOS (MIT) nếu cần |
-| C3 | Driver layer | tool | gộp "libusbK/WinUSB installer" như WinRa1n (Fix Driver) — tránh 3 lần đổi driver tay như README openra1n |
+| C3 | Driver layer | tool | gộp "libusbK/WinUSB installer" như WinRa1n (Fix Driver) — tránh 3 lần đổi driver tay như README openra1n. Lưu ý: **libusbK là bắt buộc** cho checkm8 — backend WinUSB của libusb 1.0.27 không thực hiện được USB Reset (checkm8 cần giữa các stage) |
 | C4 | Loader trên bootstrap | deb myJB → `/var/jb/usr/lib/TweakInject/myjb_loader.dylib` + `.plist` | ✅ v1: `checkm8/package/` (control, postinst, plist filter rỗng, `build.sh`) + loader fallback khi thiếu jbserver; CI `build.yml` đóng gói deb từ artifact `myjb_loader.dylib` (upload `myjb-checkm8`) |
 | C5 | kdev service | postinst deb (v1) + myjbd (v2) | 🟡 v1: postinst sinh 32B `/var/mobile/Library/MyJB/kdev` (chmod 600, chown mobile) + `kdev.txt` (hex) để copy sang tool; v2: myjbd `myjbctl kdev` đăng ký per-device + KPF secret RAM |
 | C6 | myjbd daemon | `/var/jb/Library/LaunchDaemons/` | server-side OTA container, `/activate`, revoke; chuẩn hoá XPC `com.staturnz.jbserver` (dùng lại HMAC challenge code của Amethyst) |
 | C7 | iOS 12–14 | nhánh riêng (sau) | dùng payload `legacy_kpf`/`legacy_ramdisk` (ra1npoc headers) + Pongo 2.6.1; bootstrap checkra1n/odysseyra1n (libhooker path đã có trong loader) |
 | C8 | Windows UX | tool | DFU helper (như palera1n -D), log file, tiến trình %, chạy lại nhanh |
-| C9 | CI | `.github/workflows/` | ✅ `build-checkm8.yml` mingw+linux xanh; `build.yml` (macOS) thêm bước đóng gói deb checkm8 (`checkm8/package/build.sh`) → artifact `myjb-checkm8` |
+| C9 | CI | `.github/workflows/` | 🟡 `build-checkm8.yml` mingw xanh, linux đỏ (đang điều tra); `build.yml` (macOS) thêm bước đóng gói deb checkm8 (`checkm8/package/build.sh`) → artifact `myjb-checkm8` |
 | C10 | Test matrix | thiết bị | 15.0–15.8 (A11/A10/A9) × rootless; 12–14 (A8–A11) sau |
 
 ## 4. Quyết định mặc định (có thể đổi)

