@@ -1,4 +1,4 @@
-# Hướng dẫn tích hợp tweak vào myJB (Amethyst)
+# Hướng dẫn tích hợp tweak vào myJB (Amethyst + checkm8)
 
 Tài liệu này trả lời: **khi build tweak thành công, tương tác với hệ myJB thế nào?**
 Gồm 3 phần: (A) luồng runtime để biết "ai làm gì", (B) quy trình đóng gói tweak,
@@ -243,3 +243,24 @@ Xem log nhiều process: `MYJB_DEBUG=1` rồi `tail -f /var/mobile/Library/MyJB/
 5. Test máy thật: copy `.myjb` vào `/var/jb/usr/lib/myjb/containers/`, đảm bảo devkey đúng,
    `launchctl setenv MYJB_DEBUG 1`, respring, mở process đích, xem loader.log.
 6. Chạy → đóng deb cho Sileo (file vào containers dir). Chưa chạy → bảng E.
+
+---
+
+## H. Chạy trên checkm8/palera1n (rootless, iOS 15+)
+
+Cùng builder + cùng container v1; chỉ khác cách cài loader và engine:
+
+- **Cài loader**: deb `com.wmua1.myjb.checkm8` (nguồn `checkm8/package/`, CI `build.yml`
+  → artifact `myjb-checkm8`). Deb đặt `myjb_loader.dylib` + `myjb_loader.plist` (filter rỗng)
+  vào `/var/jb/usr/lib/TweakInject/` — ElleKit tự inject vào mọi process.
+- **Điều kiện**: JB bằng `myjb_ktool` (hoặc palera1n tương đương) — bootstrap có ElleKit.
+  Engine hook = ElleKit (`MSHookFunction` có sẵn; loader không cần tải libhooker).
+- **kdev**: postinst sinh `/var/mobile/Library/MyJB/kdev` + hex ở `.../kdev.txt`
+  (copy sang PC để `--kdev-hex`, sau đó **xóa kdev.txt**).
+- **Không có session-key/attestation** trên nhánh này (không có base_hook như Amethyst) →
+  đóng gói bằng kdev hoặc devkey; container `--target-jb any` dùng chung 2 nhánh.
+- **Trustcache/sign**: không cần — kernel đã patch (KPF), loader dlopen trực tiếp; dòng log
+  `trustcache/sign unavailable` là **bình thường** trên checkm8.
+- **Đừng bật `MYJB_LEGACY`** trên checkm8: ElleKit đã load tweak thường, bật sẽ double-load.
+- Containers: `/var/jb/usr/lib/myjb/containers/` (ưu tiên) hoặc `/var/mobile/Library/MyJB/containers/`.
+- Cài deb → respring → xem log như mục E (`MYJB_DEBUG`).

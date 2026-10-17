@@ -8,6 +8,7 @@ on:
     paths:
       - 'amethyst/basebins/**'
       - 'amethyst/Amethyst/**'
+      - 'checkm8/package/**'
       - '.github/workflows/build.yml'
 
 jobs:
@@ -75,6 +76,13 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent build/Release-iphoneos/Payload Amethyst.ipa
           ls -la Amethyst.ipa
 
+      - name: Package checkm8 loader deb
+        run: |
+          set -euo pipefail
+          chmod +x checkm8/package/build.sh
+          checkm8/package/build.sh amethyst/basebins/myjb_loader/myjb_loader.dylib dist
+          ls -la dist
+
       - name: Upload basebins artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -83,6 +91,13 @@ jobs:
             amethyst/basebins/basebins.tar
             amethyst/basebins/tnsv2_updater.deb
             amethyst/basebins/tnsv2_updater_stub.deb
+          if-no-files-found: error
+
+      - name: Upload checkm8 loader deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: myjb-checkm8
+          path: dist/*.deb
           if-no-files-found: error
 
       - name: Upload IPA

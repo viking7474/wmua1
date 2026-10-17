@@ -76,7 +76,9 @@ với tool chạy Windows, dựa trên 2 repo bạn đưa + palera1n (nguồn pa
   └ (sau boot) SSH dropbear 127.0.0.1:44 (qua usbmuxd) → cài deb myJB (tuỳ chọn - auto)
 [Device đã jailbreak (palera1n rootless /var/jb)]
   ├ jbinit + ElleKit → mọi process có injection
-  ├ /var/jb/Library/TweakInject/ ← myjb_loader.dylib  (global, chạy mọi process)
+  ├ /var/jb/usr/lib/TweakInject/ ← myjb_loader.dylib + myjb_loader.plist (filter rỗng)
+  │     └ ElleKit quét đúng dir này (nguồn: ellekit `launchd/Tweak.swift` `getTweaksPath()` —
+  │       ghép cặp `<tên>.dylib` + `<tên>.plist` cùng thư mục; filter rỗng = mọi process)
   │     └ quét *.myjb (như Amethyst P5 — code y nguyên)
   │     └ key: /var/mobile/Library/MyJB/kdev  (ưu tiên 1 — đã hỗ trợ sẵn)
   ├ /var/jb/Library/LaunchDaemons/com.staturnz.myjb.plist → myjbd (mới, sau này)
@@ -89,23 +91,24 @@ với tool chạy Windows, dựa trên 2 repo bạn đưa + palera1n (nguồn pa
 - ellekit cấp engine (MSHookFunction) → loader thấy sẵn, bỏ qua bước tải libhooker;
 - kdev file là ưu tiên số 1 trong `myjb_collect_keys()`;
 - staging `/var/jb/usr/lib/myjb/run` + `/tmp` có sẵn và ghi được (rootless);
-- jbserver (`jbserver_process_library`) **cần thay**: trên palera1n không có launchd_hook
-  của Amethyst; thay bằng trustcache/sign trực tiếp vì checkm8 đã kiểm soát kernel
-  (KPF patch) — hoặc myjbd sau này cung cấp lại đúng API qua XPC.
+- jbserver (`jbserver_process_library`) **không còn là điều kiện bắt buộc**: loader chỉ log
+  cảnh báo khi vắng jbserver rồi vẫn dlopen (`main.c` fallback — kernel checkm8 đã bị KPF
+  patch bỏ cs enforce). Trên Amethyst hành vi không đổi: nếu trustcache/sign lỗi thì AMFI
+  vẫn chặn dlopen. v2: myjbd cung cấp lại đúng API qua XPC.
 
 ## 3. Bảng điểm chèn myJB (checkm8)
 
 | # | Điểm | Ở đâu | Việc |
 |---|------|-------|------|
-| C1 | Tool Windows | `checkm8/ktool/` (fork openra1n) | ✅ scaffold xong: giữ gaster+libusb, `boot.py` port sang C (`pongo_send_cmd`/`pongo_upload`/`pongo_run_palera1n`), binary `myjb_ktool`; CI `build-checkm8.yml` (mingw + linux) |
+| C1 | Tool Windows | `checkm8/ktool/` (fork openra1n) | ✅ scaffold xong: giữ gaster+libusb, `boot.py` port sang C (`pongo_send_cmd`/`pongo_upload`/`pongo_run_palera1n`), binary `myjb_ktool`; CI `build-checkm8.yml` (mingw + linux) — **CI xanh** (win exe + linux) |
 | C2 | Payload pin | build script/CI | tải `checkra1n-kpf-pongo`, `ramdisk.dmg`, `binpack.dmg`, `Pongo.bin` từ CDN + checksum; không commit binary; Pongo build từ palera1n/PongoOS (MIT) nếu cần |
 | C3 | Driver layer | tool | gộp "libusbK/WinUSB installer" như WinRa1n (Fix Driver) — tránh 3 lần đổi driver tay như README openra1n |
-| C4 | Loader trên bootstrap | deb myJB → `/var/jb/Library/TweakInject/myjb_loader.dylib` | bản build lại của myjb_loader (không cần basebin_jbserver client; trustcache bỏ qua trên checkm8) |
-| C5 | kdev service | myjbd (mới) + postinst deb | first-boot sinh 32B `/var/mobile/Library/MyJB/kdev`, chmod 600; lệnh `myjbctl kdev` để user/server lấy (đăng ký per-device); v2: KPF chèn secret RAM (mạnh nhất) |
+| C4 | Loader trên bootstrap | deb myJB → `/var/jb/usr/lib/TweakInject/myjb_loader.dylib` + `.plist` | ✅ v1: `checkm8/package/` (control, postinst, plist filter rỗng, `build.sh`) + loader fallback khi thiếu jbserver; CI `build.yml` đóng gói deb từ artifact `myjb_loader.dylib` (upload `myjb-checkm8`) |
+| C5 | kdev service | postinst deb (v1) + myjbd (v2) | 🟡 v1: postinst sinh 32B `/var/mobile/Library/MyJB/kdev` (chmod 600, chown mobile) + `kdev.txt` (hex) để copy sang tool; v2: myjbd `myjbctl kdev` đăng ký per-device + KPF secret RAM |
 | C6 | myjbd daemon | `/var/jb/Library/LaunchDaemons/` | server-side OTA container, `/activate`, revoke; chuẩn hoá XPC `com.staturnz.jbserver` (dùng lại HMAC challenge code của Amethyst) |
 | C7 | iOS 12–14 | nhánh riêng (sau) | dùng payload `legacy_kpf`/`legacy_ramdisk` (ra1npoc headers) + Pongo 2.6.1; bootstrap checkra1n/odysseyra1n (libhooker path đã có trong loader) |
 | C8 | Windows UX | tool | DFU helper (như palera1n -D), log file, tiến trình %, chạy lại nhanh |
-| C9 | CI | `.github/workflows/` | job 1: mingw-w64 build tool Windows (+ Linux); job 2: build myjb deb cho bootstrap (macOS runner) |
+| C9 | CI | `.github/workflows/` | ✅ `build-checkm8.yml` mingw+linux xanh; `build.yml` (macOS) thêm bước đóng gói deb checkm8 (`checkm8/package/build.sh`) → artifact `myjb-checkm8` |
 | C10 | Test matrix | thiết bị | 15.0–15.8 (A11/A10/A9) × rootless; 12–14 (A8–A11) sau |
 
 ## 4. Quyết định mặc định (có thể đổi)
@@ -119,12 +122,14 @@ với tool chạy Windows, dựa trên 2 repo bạn đưa + palera1n (nguồn pa
 
 ## 5. Việc kế tiếp (theo thứ tự)
 
-1. ✅ Đã scaffold `E:\winrain\checkm8\ktool\`: fork openra1n (giữ Apache notice), gộp boot.py
-   vào C, Makefile có `WINDOWS_CROSS` (mingw + libusb static), README, CI `build-checkm8.yml`.
-   Việc còn lại: push → CI xanh (theo dõi log lần compile đầu).
+1. ✅ `checkm8/ktool/` scaffold + CI `build-checkm8.yml` **xanh** (myjb_ktool.exe + linux binary).
 2. Test máy thật: JB iOS 15 (A11) bằng tool (DFU → libusbK → chạy exe) → xác nhận boot
    palera1n như openra1n gốc (parity check trước khi thêm myJB).
-3. Build myjb_loader bản "checkm8" (không cần jbserver client): deb/zip đặt loader vào
-   `/var/jb/Library/TweakInject/myjb_loader.dylib` + tạo dirs + hướng dẫn kdev thủ công (v1).
-4. Test container .myjb trên máy đã JB (devkey, `MYJB_DEBUG`).
+3. ✅ Loader bản checkm8: fallback khi vắng jbserver (`myjb_loader/src/main.c`) + deb
+   `checkm8/package/` — loader → `/var/jb/usr/lib/TweakInject/` (kèm plist filter rỗng cho
+   ElleKit), postinst tạo dirs (0177 7) + sinh kdev, `build.sh` đóng gói (dùng chung
+   `myjb_loader.dylib` với Amethyst); CI artifact `myjb-checkm8`.
+4. Test container .myjb trên máy đã JB: cài deb qua Sileo (hoặc `dpkg -i` qua SSH dropbear
+   127.0.0.1:44) → respring → đặt `.myjb` vào containers + kdev → `MYJB_DEBUG=1` kiểm log.
+   Lưu ý: **không** bật `MYJB_LEGACY` trên checkm8 (ElleKit đã tự load tweak thường).
 5. V2: myjbd (C5/C6), rồi nhánh iOS 12–14 (C7).

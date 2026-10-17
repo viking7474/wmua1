@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+mkdir -p "/var/jb/usr/lib/myjb/containers" "/var/jb/usr/lib/myjb/run"
+mkdir -p "/var/mobile/Library/MyJB/containers" "/var/mobile/Library/MyJB/run"
+
+chmod 1777 "/var/jb/usr/lib/myjb/run" "/var/mobile/Library/MyJB/run"
+chown mobile:mobile "/var/mobile/Library/MyJB" "/var/mobile/Library/MyJB/containers" "/var/mobile/Library/MyJB/run" 2>/dev/null || true
+
+if [ ! -f "/var/mobile/Library/MyJB/kdev" ]; then
+    head -c 32 /dev/urandom > "/var/mobile/Library/MyJB/kdev"
+    chmod 600 "/var/mobile/Library/MyJB/kdev"
+    chown mobile:mobile "/var/mobile/Library/MyJB/kdev" 2>/dev/null || true
+fi
+
+if command -v xxd >/dev/null 2>&1; then
+    xxd -p -c 32 "/var/mobile/Library/MyJB/kdev" > "/var/mobile/Library/MyJB/kdev.txt"
+else
+    hexdump -ve '32/1 "%02x"' "/var/mobile/Library/MyJB/kdev" > "/var/mobile/Library/MyJB/kdev.txt"
+    echo >> "/var/mobile/Library/MyJB/kdev.txt"
+fi
+chmod 644 "/var/mobile/Library/MyJB/kdev.txt"
+
+echo "[myjb] install ok; kdev hex: cat /var/mobile/Library/MyJB/kdev.txt"
+echo "[myjb] respring (sbreload) to activate"
+exit 0

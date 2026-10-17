@@ -236,9 +236,7 @@ static int myjb_load_payload(const uint8_t *data, uint32_t size, const char *des
 
     jbserver_err_t err = jbserver_process_library(path);
     if (err != JBSERVER_ERR_SUCCESS) {
-        myjb_log("myjb_loader: %s: trustcache/sign failed (%d)", desc, err);
-        unlink(path);
-        return -1;
+        myjb_log("myjb_loader: %s: trustcache/sign unavailable (%d), loading anyway", desc, err);
     }
 
     void *handle = dlopen(path, RTLD_NOW | (global ? RTLD_GLOBAL : 0));
