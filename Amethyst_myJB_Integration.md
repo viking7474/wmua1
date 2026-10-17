@@ -226,6 +226,7 @@ Không có jbserver của mình (chưa JB / JB khác / binary lạ) → không a
 | `amethyst/Amethyst/Amethyst/jailbreak/handoff.c` | `extract_basebins()` remove stale `myjb_loader.dylib`; `jailbreak_handoff()` `preload_basebin` (F_ADDFILESIGS + trust level 3) |
 | `amethyst/Amethyst/Amethyst/ui/MainController.m` | nhận diện jailbroken qua image `/usr/lib/myjb_loader.dylib` |
 | `tools/myjb_build.py` | **MỚI**: builder container v1 thuần stdlib (Ed25519/ChaCha20-Poly1305/HKDF ref impl) — `--selftest` 12/12 PASS, `--info`, `--gen-key` |
+| `MyJB_Tweak_Dev_Guide.md` | **MỚI**: hướng dẫn tích hợp tweak (đóng container, filters, kdev, attestation API, deb Sileo, troubleshooting) |
 
 Toolchain build (xác nhận từ Makefile): macOS + Xcode CLT
 (`xcrun --sdk iphoneos clang`, `-arch arm64e -arch arm64`, `-mios-version-min=12.0`,

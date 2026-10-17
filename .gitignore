@@ -28,3 +28,6 @@ basebins/dyld_patch/dyld_patch_text_13.bin
 WinRa1n2.1.exe
 ipa.zip
 basebins.zip
+checkm8/ktool/include/payloads/
+checkm8/ktool/myjb_ktool
+checkm8/ktool/myjb_ktool.exe

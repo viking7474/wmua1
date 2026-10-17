@@ -1,0 +1,64 @@
+name: build-checkm8
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'checkm8/**'
+      - '.github/workflows/build-checkm8.yml'
+
+jobs:
+  windows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install MinGW + 7z
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64 p7zip-full
+          x86_64-w64-mingw32-gcc --version | head -n 1
+
+      - name: Fetch libusb (MinGW static)
+        run: |
+          curl -fsSL -o libusb.7z https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.7z
+          7z x -olibusb libusb.7z >/dev/null
+          ls libusb/MinGW64/static
+          ls libusb/include/libusb-1.0
+
+      - name: Build myjb_ktool.exe
+        run: |
+          make -C checkm8/ktool LIBUSB=1 WINDOWS_CROSS=1 LIBUSB_MINGW="$PWD/libusb"
+          ls -la checkm8/ktool/myjb_ktool.exe
+
+      - name: Upload (windows)
+        uses: actions/upload-artifact@v4
+        with:
+          name: myjb-ktool-windows
+          path: checkm8/ktool/myjb_ktool.exe
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libusb-1.0-0-dev xxd
+
+      - name: Build
+        run: |
+          make -C checkm8/ktool LIBUSB=1
+          ls -la checkm8/ktool/myjb_ktool
+
+      - name: Upload (linux)
+        uses: actions/upload-artifact@v4
+        with:
+          name: myjb-ktool-linux
+          path: checkm8/ktool/myjb_ktool
+          if-no-files-found: error

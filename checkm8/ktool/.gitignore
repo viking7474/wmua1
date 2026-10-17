@@ -1,0 +1,6 @@
+.vscode
+include/payloads
+myjb_ktool
+myjb_ktool.exe
+*.dSYM
+.DS_Store
