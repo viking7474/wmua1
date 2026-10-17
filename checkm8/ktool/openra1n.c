@@ -156,13 +156,55 @@ close_usb_handle(usb_handle_t *handle) {
 	 * (and its DLL) cannot reliably re-initialise after libusb_exit(), which
 	 * broke every stage after the first one. Closing the device handle is
 	 * all that is needed to release the device. */
+	LOG_DEBUG("closing USB device handle");
 	libusb_close(handle->device);
 	handle->device = NULL;
+	LOG_DEBUG("USB device handle closed");
 }
 
 static void
 reset_usb_handle(const usb_handle_t *handle) {
-	libusb_reset_device(handle->device);
+	int rret;
+
+	LOG_DEBUG("USB reset: requesting device reset");
+	rret = libusb_reset_device(handle->device);
+	if(rret != LIBUSB_SUCCESS) {
+		LOG_WARN("USB reset failed: %s", libusb_error_name(rret));
+	} else {
+		LOG_DEBUG("USB reset complete");
+	}
+}
+
+static libusb_device_handle *
+open_device_by_vid_pid(usb_handle_t *handle, bool *fail_logged) {
+	libusb_device **list = NULL;
+	libusb_device_handle *dev = NULL;
+	int cnt = (int)libusb_get_device_list(NULL, &list);
+
+	if(cnt < 0) {
+		return NULL;
+	}
+	for(int d = 0; d < cnt; ++d) {
+		struct libusb_device_descriptor desc;
+
+		if(libusb_get_device_descriptor(list[d], &desc) != LIBUSB_SUCCESS) {
+			continue;
+		}
+		if(desc.idVendor != handle->vid || desc.idProduct != handle->pid) {
+			continue;
+		}
+		int r = libusb_open(list[d], &dev);
+		if(r != LIBUSB_SUCCESS) {
+			dev = NULL;
+			if(fail_logged != NULL && !*fail_logged) {
+				*fail_logged = true;
+				LOG_WARN("USB device found (VID 0x%04X PID 0x%04X) but open failed: %s", handle->vid, handle->pid, libusb_error_name(r));
+			}
+		}
+		break;
+	}
+	libusb_free_device_list(list, 1);
+	return dev;
 }
 
 static bool
@@ -211,12 +253,12 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 	}
 
 	{
-		bool open_logged = false, cfg_fail_logged = false, recovery_logged = false;
+		bool open_logged = false, open_fail_logged = false, cfg_fail_logged = false, recovery_logged = false;
 		unsigned tick = 0;
 		int last_seen_pid = -1;
 
 		for(;;) {
-			if((handle->device = libusb_open_device_with_vid_pid(NULL, handle->vid, handle->pid)) != NULL) {
+			if((handle->device = open_device_by_vid_pid(handle, &open_fail_logged)) != NULL) {
 				if(!open_logged) {
 					open_logged = true;
 					LOG_INFO("USB device opened (VID 0x%04X PID 0x%04X)", handle->vid, handle->pid);
@@ -232,7 +274,11 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 				}
 				libusb_close(handle->device);
 			}
-			if((++tick % 200) == 0) {
+			++tick;
+			if((tick % 20) == 0) {
+				LOG_DEBUG("waiting for device... (%u attempts)", tick);
+			}
+			if((tick % 200) == 0) {
 				libusb_device **list = NULL;
 				int cnt = (int)libusb_get_device_list(NULL, &list);
 				if(cnt >= 0) {

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <time.h>
 
 #if defined(_WIN32) || defined(WIN32)
 #	include <windows.h>
@@ -61,17 +62,24 @@ myjb_log_exit(int code) {
 static inline void
 myjb_log(const char *color, const char *label, const char *file, int line, const char *fmt, ...) {
 	va_list ap, ap2;
+	char tsbuf[16] = "--:--:--";
+	time_t now = time(NULL);
+	struct tm *tm_now = localtime(&now);
+
+	if(tm_now != NULL) {
+		strftime(tsbuf, sizeof(tsbuf), "%H:%M:%S", tm_now);
+	}
 
 	va_start(ap, fmt);
 	va_copy(ap2, ap);
-	printf("%s%s (%s:%d)" GRAY_COLOR " --> " WHITE_COLOR, color, label, file, line);
+	printf(GRAY_COLOR "[%s] " "%s%s (%s:%d)" GRAY_COLOR " --> " WHITE_COLOR, tsbuf, color, label, file, line);
 	vprintf(fmt, ap);
 	printf(RESET_COLOR "\n");
 	fflush(stdout);
 	va_end(ap);
 
 	if(myjb_log_file != NULL) {
-		fprintf(myjb_log_file, "%s (%s:%d) --> ", label, file, line);
+		fprintf(myjb_log_file, "[%s] %s (%s:%d) --> ", tsbuf, label, file, line);
 		vfprintf(myjb_log_file, fmt, ap2);
 		fputc('\n', myjb_log_file);
 		fflush(myjb_log_file);
