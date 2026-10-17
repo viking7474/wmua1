@@ -152,8 +152,12 @@ sleep_ms(unsigned ms) {
 #ifdef HAVE_LIBUSB
 static void
 close_usb_handle(usb_handle_t *handle) {
+	/* Keep the libusb context alive for the whole run: the UsbDk backend
+	 * (and its DLL) cannot reliably re-initialise after libusb_exit(), which
+	 * broke every stage after the first one. Closing the device handle is
+	 * all that is needed to release the device. */
 	libusb_close(handle->device);
-	libusb_exit(NULL);
+	handle->device = NULL;
 }
 
 static void
@@ -163,9 +167,19 @@ reset_usb_handle(const usb_handle_t *handle) {
 
 static bool
 wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
-	if(libusb_init(NULL) == LIBUSB_SUCCESS) {
-		bool open_logged = false, cfg_fail_logged = false, recovery_logged = false;
-		unsigned tick = 0;
+	static bool libusb_ready = false;
+
+	if(!libusb_ready) {
+		int rc = libusb_init(NULL);
+
+		if(rc != LIBUSB_SUCCESS) {
+			LOG_ERROR("libusb_init failed: %s", libusb_error_name(rc));
+			return false;
+		}
+		libusb_ready = true;
+
+		const struct libusb_version *ver = libusb_get_version();
+		LOG_DEBUG("libusb %u.%u.%u.%u", (unsigned)ver->major, (unsigned)ver->minor, (unsigned)ver->micro, (unsigned)ver->nano);
 
 #ifdef _WIN32
 		if(libusb_set_option(NULL, LIBUSB_OPTION_USE_USBDK) == LIBUSB_SUCCESS) {
@@ -194,6 +208,12 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 				LOG_DEBUG("USB scan failed: %s", libusb_error_name(cnt));
 			}
 		}
+	}
+
+	{
+		bool open_logged = false, cfg_fail_logged = false, recovery_logged = false;
+		unsigned tick = 0;
+
 		for(;;) {
 			if((handle->device = libusb_open_device_with_vid_pid(NULL, handle->vid, handle->pid)) != NULL) {
 				if(!open_logged) {
@@ -229,8 +249,6 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 			}
 			sleep_ms(usb_timeout);
 		}
-	} else {
-		LOG_ERROR("libusb_init failed");
 	}
 	return false;
 }
