@@ -1,0 +1,8 @@
+_jb_connect
+_jb_disconnect
+_jb_entitle
+_jb_entitle_now
+_jb_fix_setuid
+_jb_fix_setuid_now
+_jb_oneshot_entitle_now
+_jb_oneshot_fix_setuid_now

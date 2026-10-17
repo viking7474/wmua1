@@ -1,0 +1,559 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 53;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2F0F3B742FD5CA02003D8249 /* aop.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F0F3B732FD5CA02003D8249 /* aop.c */; };
+		2F14912B2FF96394006A270C /* tnsv2_updater_stub.deb in Resources */ = {isa = PBXBuildFile; fileRef = 2F1491292FF96366006A270C /* tnsv2_updater_stub.deb */; };
+		2F14912C2FF96394006A270C /* tnsv2_updater.deb in Resources */ = {isa = PBXBuildFile; fileRef = 2F14912A2FF96366006A270C /* tnsv2_updater.deb */; };
+		2F1C1F592F90448100839511 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1F582F90448100839511 /* AppDelegate.m */; };
+		2F1C1F5F2F90448100839511 /* MainController.m in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1F5E2F90448100839511 /* MainController.m */; };
+		2F1C1F642F90448100839511 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2F1C1F632F90448100839511 /* Assets.xcassets */; };
+		2F1C1F672F90448100839511 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2F1C1F652F90448100839511 /* LaunchScreen.storyboard */; };
+		2F1C1F6A2F90448100839511 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1F692F90448100839511 /* main.m */; };
+		2F1C1F732F9045C700839511 /* Utilities.m in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1F722F9045C700839511 /* Utilities.m */; };
+		2F1C1F762F904C0500839511 /* CreditsController.m in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1F752F904C0500839511 /* CreditsController.m */; };
+		2F1C1F7F2F907BC100839511 /* util.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1F7D2F907BC100839511 /* util.c */; };
+		2F1C1F802F907BC100839511 /* hemlock.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1F7E2F907BC100839511 /* hemlock.c */; };
+		2F1C1F8D2F907BE600839511 /* jailbreak.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1F8B2F907BE600839511 /* jailbreak.c */; };
+		2F1C1F952F907D5800839511 /* remount.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1F912F907D5800839511 /* remount.c */; };
+		2F1C1F962F907D5800839511 /* utils.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1F942F907D5800839511 /* utils.c */; };
+		2F1C1F992F907D5E00839511 /* patchfinder.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1F982F907D5E00839511 /* patchfinder.c */; };
+		2F1C1F9C2F907D6600839511 /* memory.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1F9B2F907D6600839511 /* memory.c */; };
+		2F1C1FA22F907D7000839511 /* handoff.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1FA02F907D7000839511 /* handoff.c */; };
+		2F1C1FA52F907DC200839511 /* macho.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F1C1FA42F907DC200839511 /* macho.c */; };
+		2F376B092F9BC942008E2EEB /* trustcache.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F376B082F9BC942008E2EEB /* trustcache.c */; };
+		2F3DCF382FB1658000A257A2 /* install.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F3DCF372FB1658000A257A2 /* install.c */; };
+		2F3DCF412FB16EAE00A257A2 /* sileo.deb in Resources */ = {isa = PBXBuildFile; fileRef = 2F3DCF3E2FB16DAF00A257A2 /* sileo.deb */; };
+		2F3DCF422FB16EAE00A257A2 /* zebra.deb in Resources */ = {isa = PBXBuildFile; fileRef = 2F3DCF3D2FB16DAE00A257A2 /* zebra.deb */; };
+		2F3DCF452FB16EAE00A257A2 /* libswift.deb in Resources */ = {isa = PBXBuildFile; fileRef = 2F3DCF392FB16CA700A257A2 /* libswift.deb */; };
+		2F46C3562FEB31B900FFCCEB /* ppl.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F46C3552FEB31B900FFCCEB /* ppl.c */; };
+		2F5125832FBCE2FF00AE1074 /* dma.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F5125822FBCE2FF00AE1074 /* dma.c */; };
+		2F631DE02FB207E9002FEF84 /* bootstrap-1500.tar.lzfse in Resources */ = {isa = PBXBuildFile; fileRef = 2F631DDE2FB2079B002FEF84 /* bootstrap-1500.tar.lzfse */; };
+		2F631DE12FB207E9002FEF84 /* bootstrap-1600.tar.lzfse in Resources */ = {isa = PBXBuildFile; fileRef = 2F631DDF2FB2079B002FEF84 /* bootstrap-1600.tar.lzfse */; };
+		2FC7DEE22F91977A0076631F /* basebins.tar in Resources */ = {isa = PBXBuildFile; fileRef = 2FC7DEE12F91977A0076631F /* basebins.tar */; };
+		2FDCFB112FC8761B00D87FDB /* trigon.c in Sources */ = {isa = PBXBuildFile; fileRef = 2FDCFB102FC8761B00D87FDB /* trigon.c */; };
+		2FDCFB142FC8762100D87FDB /* util.c in Sources */ = {isa = PBXBuildFile; fileRef = 2FDCFB132FC8762100D87FDB /* util.c */; };
+		2FE4F39A2FC670AD008BE680 /* nvram.c in Sources */ = {isa = PBXBuildFile; fileRef = 2FE4F3992FC670AD008BE680 /* nvram.c */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		2F0F3B722FD5CA02003D8249 /* aop.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = aop.h; sourceTree = "<group>"; };
+		2F0F3B732FD5CA02003D8249 /* aop.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = aop.c; sourceTree = "<group>"; };
+		2F1491292FF96366006A270C /* tnsv2_updater_stub.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = tnsv2_updater_stub.deb; path = ../../basebins/tnsv2_updater_stub.deb; sourceTree = "<group>"; };
+		2F14912A2FF96366006A270C /* tnsv2_updater.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = tnsv2_updater.deb; path = ../../basebins/tnsv2_updater.deb; sourceTree = "<group>"; };
+		2F1C1F542F90448100839511 /* Amethyst.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Amethyst.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2F1C1F572F90448100839511 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
+		2F1C1F582F90448100839511 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
+		2F1C1F5D2F90448100839511 /* MainController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MainController.h; sourceTree = "<group>"; };
+		2F1C1F5E2F90448100839511 /* MainController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MainController.m; sourceTree = "<group>"; };
+		2F1C1F632F90448100839511 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2F1C1F662F90448100839511 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		2F1C1F682F90448100839511 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2F1C1F692F90448100839511 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		2F1C1F712F9045C700839511 /* Utilities.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Utilities.h; sourceTree = "<group>"; };
+		2F1C1F722F9045C700839511 /* Utilities.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Utilities.m; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.objc; };
+		2F1C1F742F904C0500839511 /* CreditsController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CreditsController.h; sourceTree = "<group>"; };
+		2F1C1F752F904C0500839511 /* CreditsController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CreditsController.m; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.objc; };
+		2F1C1F7B2F907BC100839511 /* hemlock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = hemlock.h; sourceTree = "<group>"; };
+		2F1C1F7C2F907BC100839511 /* util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = util.h; sourceTree = "<group>"; };
+		2F1C1F7D2F907BC100839511 /* util.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = util.c; sourceTree = "<group>"; };
+		2F1C1F7E2F907BC100839511 /* hemlock.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = hemlock.c; sourceTree = "<group>"; };
+		2F1C1F8B2F907BE600839511 /* jailbreak.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = jailbreak.c; sourceTree = "<group>"; };
+		2F1C1F8C2F907BE600839511 /* jailbreak.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = jailbreak.h; sourceTree = "<group>"; };
+		2F1C1F912F907D5800839511 /* remount.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = remount.c; sourceTree = "<group>"; };
+		2F1C1F922F907D5800839511 /* utils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = utils.h; sourceTree = "<group>"; };
+		2F1C1F932F907D5800839511 /* remount.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = remount.h; sourceTree = "<group>"; };
+		2F1C1F942F907D5800839511 /* utils.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = utils.c; sourceTree = "<group>"; };
+		2F1C1F972F907D5E00839511 /* patchfinder.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = patchfinder.h; sourceTree = "<group>"; };
+		2F1C1F982F907D5E00839511 /* patchfinder.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = patchfinder.c; sourceTree = "<group>"; };
+		2F1C1F9A2F907D6600839511 /* memory.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = memory.h; sourceTree = "<group>"; };
+		2F1C1F9B2F907D6600839511 /* memory.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = memory.c; sourceTree = "<group>"; };
+		2F1C1F9D2F907D7000839511 /* handoff.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = handoff.h; sourceTree = "<group>"; };
+		2F1C1FA02F907D7000839511 /* handoff.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = handoff.c; sourceTree = "<group>"; };
+		2F1C1FA32F907DC200839511 /* macho.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = macho.h; sourceTree = "<group>"; };
+		2F1C1FA42F907DC200839511 /* macho.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = macho.c; sourceTree = "<group>"; };
+		2F376B072F9BC942008E2EEB /* trustcache.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = trustcache.h; sourceTree = "<group>"; };
+		2F376B082F9BC942008E2EEB /* trustcache.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = trustcache.c; sourceTree = "<group>"; };
+		2F3DCF362FB1658000A257A2 /* install.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = install.h; sourceTree = "<group>"; };
+		2F3DCF372FB1658000A257A2 /* install.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = install.c; sourceTree = "<group>"; };
+		2F3DCF392FB16CA700A257A2 /* libswift.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libswift.deb; sourceTree = "<group>"; };
+		2F3DCF3D2FB16DAE00A257A2 /* zebra.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = zebra.deb; sourceTree = "<group>"; };
+		2F3DCF3E2FB16DAF00A257A2 /* sileo.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = sileo.deb; sourceTree = "<group>"; };
+		2F46C3542FEB31B900FFCCEB /* ppl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ppl.h; sourceTree = "<group>"; };
+		2F46C3552FEB31B900FFCCEB /* ppl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ppl.c; sourceTree = "<group>"; };
+		2F5125812FBCE2FF00AE1074 /* dma.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = dma.h; sourceTree = "<group>"; };
+		2F5125822FBCE2FF00AE1074 /* dma.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = dma.c; sourceTree = "<group>"; };
+		2F631DDE2FB2079B002FEF84 /* bootstrap-1500.tar.lzfse */ = {isa = PBXFileReference; lastKnownFileType = file; path = "bootstrap-1500.tar.lzfse"; sourceTree = "<group>"; };
+		2F631DDF2FB2079B002FEF84 /* bootstrap-1600.tar.lzfse */ = {isa = PBXFileReference; lastKnownFileType = file; path = "bootstrap-1600.tar.lzfse"; sourceTree = "<group>"; };
+		2FC7DEE12F91977A0076631F /* basebins.tar */ = {isa = PBXFileReference; lastKnownFileType = archive.tar; name = basebins.tar; path = ../../basebins/basebins.tar; sourceTree = "<group>"; };
+		2FDCFB0F2FC8761B00D87FDB /* trigon.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = trigon.h; sourceTree = "<group>"; };
+		2FDCFB102FC8761B00D87FDB /* trigon.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = trigon.c; sourceTree = "<group>"; };
+		2FDCFB122FC8762100D87FDB /* util.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = util.h; sourceTree = "<group>"; };
+		2FDCFB132FC8762100D87FDB /* util.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = util.c; sourceTree = "<group>"; };
+		2FE4F3982FC670AD008BE680 /* nvram.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = nvram.h; sourceTree = "<group>"; };
+		2FE4F3992FC670AD008BE680 /* nvram.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = nvram.c; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		2F0903722FF489AD00A22C2F /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		2F1C1F4B2F90448100839511 = {
+			isa = PBXGroup;
+			children = (
+				2F1C1F562F90448100839511 /* Amethyst */,
+				2F1C1F552F90448100839511 /* Products */,
+				2F0903722FF489AD00A22C2F /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		2F1C1F552F90448100839511 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				2F1C1F542F90448100839511 /* Amethyst.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		2F1C1F562F90448100839511 /* Amethyst */ = {
+			isa = PBXGroup;
+			children = (
+				2F631DDE2FB2079B002FEF84 /* bootstrap-1500.tar.lzfse */,
+				2F631DDF2FB2079B002FEF84 /* bootstrap-1600.tar.lzfse */,
+				2F1491292FF96366006A270C /* tnsv2_updater_stub.deb */,
+				2F14912A2FF96366006A270C /* tnsv2_updater.deb */,
+				2F3DCF3E2FB16DAF00A257A2 /* sileo.deb */,
+				2F3DCF3D2FB16DAE00A257A2 /* zebra.deb */,
+				2F3DCF392FB16CA700A257A2 /* libswift.deb */,
+				2FC7DEE12F91977A0076631F /* basebins.tar */,
+				2F1C1F8A2F907BD200839511 /* jailbreak */,
+				2F1C1F772F907BA100839511 /* exploit */,
+				2F1C1F702F90452D00839511 /* ui */,
+				2F1C1F572F90448100839511 /* AppDelegate.h */,
+				2F1C1F582F90448100839511 /* AppDelegate.m */,
+				2F1C1F632F90448100839511 /* Assets.xcassets */,
+				2F1C1F652F90448100839511 /* LaunchScreen.storyboard */,
+				2F1C1F682F90448100839511 /* Info.plist */,
+				2F1C1F692F90448100839511 /* main.m */,
+			);
+			path = Amethyst;
+			sourceTree = "<group>";
+		};
+		2F1C1F702F90452D00839511 /* ui */ = {
+			isa = PBXGroup;
+			children = (
+				2F1C1F5D2F90448100839511 /* MainController.h */,
+				2F1C1F5E2F90448100839511 /* MainController.m */,
+				2F1C1F742F904C0500839511 /* CreditsController.h */,
+				2F1C1F752F904C0500839511 /* CreditsController.m */,
+				2F1C1F712F9045C700839511 /* Utilities.h */,
+				2F1C1F722F9045C700839511 /* Utilities.m */,
+			);
+			path = ui;
+			sourceTree = "<group>";
+		};
+		2F1C1F772F907BA100839511 /* exploit */ = {
+			isa = PBXGroup;
+			children = (
+				2F1C1F7A2F907BB500839511 /* trigon */,
+				2F1C1F792F907BAC00839511 /* hemlock */,
+			);
+			path = exploit;
+			sourceTree = "<group>";
+		};
+		2F1C1F792F907BAC00839511 /* hemlock */ = {
+			isa = PBXGroup;
+			children = (
+				2F1C1F7E2F907BC100839511 /* hemlock.c */,
+				2F1C1F7B2F907BC100839511 /* hemlock.h */,
+				2F1C1F7D2F907BC100839511 /* util.c */,
+				2F1C1F7C2F907BC100839511 /* util.h */,
+			);
+			path = hemlock;
+			sourceTree = "<group>";
+		};
+		2F1C1F7A2F907BB500839511 /* trigon */ = {
+			isa = PBXGroup;
+			children = (
+				2FDCFB102FC8761B00D87FDB /* trigon.c */,
+				2FDCFB0F2FC8761B00D87FDB /* trigon.h */,
+				2FDCFB132FC8762100D87FDB /* util.c */,
+				2FDCFB122FC8762100D87FDB /* util.h */,
+				2F0F3B732FD5CA02003D8249 /* aop.c */,
+				2F0F3B722FD5CA02003D8249 /* aop.h */,
+			);
+			path = trigon;
+			sourceTree = "<group>";
+		};
+		2F1C1F8A2F907BD200839511 /* jailbreak */ = {
+			isa = PBXGroup;
+			children = (
+				2F1C1F8B2F907BE600839511 /* jailbreak.c */,
+				2F1C1F8C2F907BE600839511 /* jailbreak.h */,
+				2F1C1F9B2F907D6600839511 /* memory.c */,
+				2F1C1F9A2F907D6600839511 /* memory.h */,
+				2F376B082F9BC942008E2EEB /* trustcache.c */,
+				2F376B072F9BC942008E2EEB /* trustcache.h */,
+				2F1C1F912F907D5800839511 /* remount.c */,
+				2F1C1F932F907D5800839511 /* remount.h */,
+				2F1C1FA42F907DC200839511 /* macho.c */,
+				2F1C1FA32F907DC200839511 /* macho.h */,
+				2F1C1F982F907D5E00839511 /* patchfinder.c */,
+				2F1C1F972F907D5E00839511 /* patchfinder.h */,
+				2F1C1F942F907D5800839511 /* utils.c */,
+				2F1C1F922F907D5800839511 /* utils.h */,
+				2F1C1FA02F907D7000839511 /* handoff.c */,
+				2F1C1F9D2F907D7000839511 /* handoff.h */,
+				2F5125822FBCE2FF00AE1074 /* dma.c */,
+				2F5125812FBCE2FF00AE1074 /* dma.h */,
+				2F46C3552FEB31B900FFCCEB /* ppl.c */,
+				2F46C3542FEB31B900FFCCEB /* ppl.h */,
+				2F3DCF372FB1658000A257A2 /* install.c */,
+				2F3DCF362FB1658000A257A2 /* install.h */,
+				2FE4F3992FC670AD008BE680 /* nvram.c */,
+				2FE4F3982FC670AD008BE680 /* nvram.h */,
+			);
+			path = jailbreak;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		2F1C1F532F90448100839511 /* Amethyst */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2F1C1F6D2F90448100839511 /* Build configuration list for PBXNativeTarget "Amethyst" */;
+			buildPhases = (
+				2F1C1F502F90448100839511 /* Sources */,
+				2F1C1F522F90448100839511 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Amethyst;
+			productName = Amethyst;
+			productReference = 2F1C1F542F90448100839511 /* Amethyst.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		2F1C1F4C2F90448100839511 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1340;
+				TargetAttributes = {
+					2F1C1F532F90448100839511 = {
+						CreatedOnToolsVersion = 13.4.1;
+					};
+				};
+			};
+			buildConfigurationList = 2F1C1F4F2F90448100839511 /* Build configuration list for PBXProject "Amethyst" */;
+			compatibilityVersion = "Xcode 11.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 2F1C1F4B2F90448100839511;
+			productRefGroup = 2F1C1F552F90448100839511 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				2F1C1F532F90448100839511 /* Amethyst */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		2F1C1F522F90448100839511 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2F14912B2FF96394006A270C /* tnsv2_updater_stub.deb in Resources */,
+				2F14912C2FF96394006A270C /* tnsv2_updater.deb in Resources */,
+				2F631DE02FB207E9002FEF84 /* bootstrap-1500.tar.lzfse in Resources */,
+				2F631DE12FB207E9002FEF84 /* bootstrap-1600.tar.lzfse in Resources */,
+				2F3DCF412FB16EAE00A257A2 /* sileo.deb in Resources */,
+				2F3DCF422FB16EAE00A257A2 /* zebra.deb in Resources */,
+				2F3DCF452FB16EAE00A257A2 /* libswift.deb in Resources */,
+				2F1C1F672F90448100839511 /* LaunchScreen.storyboard in Resources */,
+				2F1C1F642F90448100839511 /* Assets.xcassets in Resources */,
+				2FC7DEE22F91977A0076631F /* basebins.tar in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2F1C1F502F90448100839511 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2F0F3B742FD5CA02003D8249 /* aop.c in Sources */,
+				2F1C1FA52F907DC200839511 /* macho.c in Sources */,
+				2F1C1F952F907D5800839511 /* remount.c in Sources */,
+				2FDCFB142FC8762100D87FDB /* util.c in Sources */,
+				2F1C1F962F907D5800839511 /* utils.c in Sources */,
+				2F1C1F9C2F907D6600839511 /* memory.c in Sources */,
+				2F1C1F802F907BC100839511 /* hemlock.c in Sources */,
+				2FE4F39A2FC670AD008BE680 /* nvram.c in Sources */,
+				2F1C1F732F9045C700839511 /* Utilities.m in Sources */,
+				2F5125832FBCE2FF00AE1074 /* dma.c in Sources */,
+				2F1C1F992F907D5E00839511 /* patchfinder.c in Sources */,
+				2F1C1FA22F907D7000839511 /* handoff.c in Sources */,
+				2F376B092F9BC942008E2EEB /* trustcache.c in Sources */,
+				2F1C1F762F904C0500839511 /* CreditsController.m in Sources */,
+				2F1C1F5F2F90448100839511 /* MainController.m in Sources */,
+				2F46C3562FEB31B900FFCCEB /* ppl.c in Sources */,
+				2F3DCF382FB1658000A257A2 /* install.c in Sources */,
+				2F1C1F8D2F907BE600839511 /* jailbreak.c in Sources */,
+				2FDCFB112FC8761B00D87FDB /* trigon.c in Sources */,
+				2F1C1F592F90448100839511 /* AppDelegate.m in Sources */,
+				2F1C1F6A2F90448100839511 /* main.m in Sources */,
+				2F1C1F7F2F907BC100839511 /* util.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		2F1C1F652F90448100839511 /* LaunchScreen.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				2F1C1F662F90448100839511 /* Base */,
+			);
+			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		2F1C1F6B2F90448100839511 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.5;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		2F1C1F6C2F90448100839511 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.5;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		2F1C1F6E2F90448100839511 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Amethyst/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Amethyst",
+				);
+				MARKETING_VERSION = 1.1;
+				OTHER_LDFLAGS = (
+					"-framework",
+					IOSurface,
+					"-framework",
+					IOKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.staturnz.amethyst;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2F1C1F6F2F90448100839511 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Amethyst/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Amethyst",
+				);
+				MARKETING_VERSION = 1.1;
+				OTHER_LDFLAGS = (
+					"-framework",
+					IOSurface,
+					"-framework",
+					IOKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.staturnz.amethyst;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2F1C1F4F2F90448100839511 /* Build configuration list for PBXProject "Amethyst" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2F1C1F6B2F90448100839511 /* Debug */,
+				2F1C1F6C2F90448100839511 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2F1C1F6D2F90448100839511 /* Build configuration list for PBXNativeTarget "Amethyst" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2F1C1F6E2F90448100839511 /* Debug */,
+				2F1C1F6F2F90448100839511 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 2F1C1F4C2F90448100839511 /* Project object */;
+}

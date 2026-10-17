@@ -1,0 +1,93 @@
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+    paths:
+      - 'amethyst/basebins/**'
+      - 'amethyst/Amethyst/**'
+      - '.github/workflows/build.yml'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain (ldid, dpkg, llvm-objcopy)
+        run: |
+          set -uo pipefail
+
+          brew install dpkg
+
+          if ! brew install ldid; then
+            echo "brew ldid failed -> fallback to Procursus release binary"
+            ARCH="$(uname -m)"
+            for asset in "ldid_macosx_${ARCH}" "ldid_macosx_arm64" "ldid_macosx_x86_64"; do
+              if curl -fsSL -o /tmp/ldid "https://github.com/ProcursusTeam/ldid/releases/latest/download/${asset}"; then
+                chmod +x /tmp/ldid
+                sudo mv /tmp/ldid /usr/local/bin/ldid
+                break
+              fi
+            done
+          fi
+
+          brew install llvm || true
+          LLVM_BIN="$(brew --prefix llvm)/bin"
+          echo "$LLVM_BIN" >> "$GITHUB_PATH"
+          export PATH="$LLVM_BIN:$PATH"
+
+          command -v ldid >/dev/null || { echo "::error::ldid not found"; exit 1; }
+          command -v dpkg-deb >/dev/null || { echo "::error::dpkg-deb not found"; exit 1; }
+          command -v llvm-objcopy >/dev/null || { echo "::error::llvm-objcopy not found"; exit 1; }
+
+          ldid -h 2>&1 | head -n 1 || true
+          llvm-objcopy --version | head -n 1
+
+      - name: Build basebins + debs
+        run: |
+          set -euo pipefail
+          make -C amethyst/basebins package
+          ls -la amethyst/basebins/basebins.tar amethyst/basebins/tnsv2_updater.deb amethyst/basebins/tnsv2_updater_stub.deb
+
+      - name: Build unsigned IPA
+        run: |
+          set -euo pipefail
+          cd amethyst/Amethyst
+          xcodebuild clean build \
+            -project Amethyst.xcodeproj \
+            -scheme Amethyst \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            SYMROOT="$PWD/build" \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+          strip build/Release-iphoneos/Amethyst.app/Amethyst
+          ldid -S build/Release-iphoneos/Amethyst.app/Amethyst
+          rm -rf build/Release-iphoneos/Payload
+          mkdir -p build/Release-iphoneos/Payload
+          mv build/Release-iphoneos/Amethyst.app build/Release-iphoneos/Payload/Amethyst.app
+          ditto -c -k --sequesterRsrc --keepParent build/Release-iphoneos/Payload Amethyst.ipa
+          ls -la Amethyst.ipa
+
+      - name: Upload basebins artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: basebins
+          path: |
+            amethyst/basebins/basebins.tar
+            amethyst/basebins/tnsv2_updater.deb
+            amethyst/basebins/tnsv2_updater_stub.deb
+          if-no-files-found: error
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa
+          path: amethyst/Amethyst/Amethyst.ipa
+          if-no-files-found: error
