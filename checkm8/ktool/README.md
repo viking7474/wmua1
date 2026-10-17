@@ -17,23 +17,18 @@ Khác biệt so với openra1n gốc:
 ## Usage (Windows)
 
 0. Đưa thiết bị vào **DFU**.
-1. Cài driver USB đặc biệt (checkm8 cần **USB Reset thật** giữa các stage):
-   - **Cách A (khuyến nghị): UsbDk** — tải bản mới nhất tại
-     <https://github.com/daynix/UsbDk/releases> (ví dụ `UsbDk_1.0.22_x64.msi`),
-     cài rồi **khởi động lại máy**. Tool tự chuyển sang backend UsbDk khi có;
-     không cần đổi driver cho thiết bị (giữ driver Apple) và dùng được luôn cho
-     Pongo USB Device — không cần bước driver phụ.
-   - **Cách B: libusbK qua Zadig** — chọn "Apple Mobile Device (DFU Mode)"
-     (05AC 1227) → dropdown driver chọn **libusbK** → **Replace Driver**.
-     Khi Pongo USB Device hiện ra phải đổi driver libusbK riêng cho nó (bước 3).
-   - WinUSB (mặc định) **không đủ**: libusb 1.0.27 xác nhận backend WinUSB
-     không reset được device (chỉ cycle pipe) → tool treo ở heap spray.
-2. Chạy `myjb_ktool.exe` **as Administrator** (UsbDk cần quyền admin để redirect
-   thiết bị) — tool tự chạy checkm8, boot PongoOS, và gửi chuỗi boot palera1n.
-3. Khi tool báo đã gửi xong, thiết bị re-enumerate "Pongo USB Device":
-   nếu dùng libusbK (cách B) và quá trình upload KPF/ramdisk/overlay bị kẹt chờ,
-   cài lại driver **libusbK** cho Pongo USB Device rồi chạy lại tool.
-   Với UsbDk (cách A) không cần làm gì thêm.
+1. Gắn driver **libusbK** cho thiết bị DFU bằng **Zadig** (bắt buộc):
+   chọn "Apple Mobile Device (DFU Mode)" (05AC 1227) → dropdown driver chọn
+   **libusbK** → **Replace Driver**.
+   - WinUSB **không đủ**: backend WinUSB của libusb không reset được device
+     (chỉ cycle pipe) → tool treo ở heap spray.
+   - UsbDk **không dùng được**: backend UsbDk của libusb 1.0.27 không hỗ trợ
+     `cancel_transfer` (`NULL` trong `usbdk_backend`) — checkm8 cần abort
+     control transfer đúng thời điểm từ stage 2 trở đi → tool đứng im ngay sau
+     "Setting up the exploit". UsbDk reset thật nhưng thiếu cancel.
+2. Chạy `myjb_ktool.exe` — tool tự chạy checkm8, boot PongoOS, và gửi chuỗi boot palera1n.
+3. Khi tool báo đã gửi xong, thiết bị re-enumerate "Pongo USB Device" (05AC 4141):
+   cài driver **libusbK** cho nó bằng Zadig.
    Mẹo: khi tool đang ở "Waiting for PongoOS device", chỉ cần mở Zadig →
    "Pongo USB Device" → Replace Driver → libusbK; tool đang chờ sẽ tự mở được
    thiết bị ngay, không phải chạy lại từ đầu.

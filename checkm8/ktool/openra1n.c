@@ -152,10 +152,8 @@ sleep_ms(unsigned ms) {
 #ifdef HAVE_LIBUSB
 static void
 close_usb_handle(usb_handle_t *handle) {
-	/* Keep the libusb context alive for the whole run: the UsbDk backend
-	 * (and its DLL) cannot reliably re-initialise after libusb_exit(), which
-	 * broke every stage after the first one. Closing the device handle is
-	 * all that is needed to release the device. */
+	/* Keep a single libusb context for the whole run (normal libusb pattern;
+	 * closing the device handle is all that is needed to release the device). */
 	LOG_DEBUG("closing USB device handle");
 	libusb_close(handle->device);
 	handle->device = NULL;
@@ -224,11 +222,11 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 		LOG_DEBUG("libusb %u.%u.%u.%u", (unsigned)ver->major, (unsigned)ver->minor, (unsigned)ver->micro, (unsigned)ver->nano);
 
 #ifdef _WIN32
-		if(libusb_set_option(NULL, LIBUSB_OPTION_USE_USBDK) == LIBUSB_SUCCESS) {
-			LOG_INFO("UsbDk backend enabled (real USB reset support)");
-		} else {
-			LOG_DEBUG("UsbDk backend not available; using the default Windows backend");
-		}
+		/* Windows: do NOT enable the UsbDk backend. libusb 1.0.27's UsbDk
+		 * backend has no cancel_transfer (usbdk_backend.cancel_transfer is
+		 * NULL) and checkm8 stages after the first abort control transfers
+		 * at precise timings. The libusbK driver (bound via Zadig) provides
+		 * both a real USB reset and cancellable transfers. */
 #endif
 		{
 			libusb_device **list = NULL;
@@ -956,11 +954,16 @@ checkm8_stage_reset(const usb_handle_t *handle) {
 static bool
 checkm8_stage_setup(const usb_handle_t *handle) {
 	unsigned usb_abort_timeout = usb_timeout - 1;
-	transfer_ret_t transfer_ret;
+	unsigned attempts = 0;
+	transfer_ret_t transfer_ret = { 0 };
 
 	for(;;) {
 		if(send_usb_control_request_async_no_data(handle, 0x21, DFU_DNLOAD, 0, 0, DFU_MAX_TRANSFER_SZ, usb_abort_timeout, &transfer_ret) && transfer_ret.sz < config_overwrite_pad && send_usb_control_request_no_data(handle, 0, 0, 0, 0, config_overwrite_pad - transfer_ret.sz, &transfer_ret) && transfer_ret.ret == USB_TRANSFER_STALL) {
+			LOG_DEBUG("stage setup succeeded after %u attempts", attempts + 1);
 			return true;
+		}
+		if((++attempts % 5000) == 0) {
+			LOG_DEBUG("stage setup: %u attempts so far (abort_timeout=%u, last sz=%u ret=%d)", attempts, usb_abort_timeout, (unsigned)transfer_ret.sz, (int)transfer_ret.ret);
 		}
 		send_usb_control_request_no_data(handle, 0x21, DFU_DNLOAD, 0, 0, EP0_MAX_PACKET_SZ, NULL);
 		usb_abort_timeout = (usb_abort_timeout + 1) % (usb_timeout - usb_abort_timeout_min + 1) + usb_abort_timeout_min;
@@ -1333,7 +1336,7 @@ int main(int argc, char **argv) {
 	LOG_INFO("full log is written to %s next to the exe", MYJB_LOG_NAME);
 
 #ifdef _WIN32
-	LOG_WARN("Windows: checkm8 needs a driver with a real USB reset. Recommended: install UsbDk (https://github.com/daynix/UsbDk/releases) and reboot; or bind the libusbK driver via Zadig. WinUSB will hang at the heap spray");
+	LOG_WARN("Windows: the DFU device driver must be libusbK (Zadig -> Replace Driver -> libusbK). WinUSB cannot reset the device and UsbDk cannot cancel transfers; without libusbK checkm8 hangs after stage 1");
 #endif
 
 	usb_handle_t handle;
