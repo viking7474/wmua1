@@ -174,6 +174,26 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 			LOG_DEBUG("UsbDk backend not available; using the default Windows backend");
 		}
 #endif
+		{
+			libusb_device **list = NULL;
+			int cnt = (int)libusb_get_device_list(NULL, &list);
+
+			if(cnt >= 0) {
+				int d;
+
+				LOG_DEBUG("USB scan: %d device(s) visible to libusb", cnt);
+				for(d = 0; d < cnt; ++d) {
+					struct libusb_device_descriptor desc;
+
+					if(libusb_get_device_descriptor(list[d], &desc) == LIBUSB_SUCCESS && desc.idVendor == APPLE_VID) {
+						LOG_DEBUG("Apple USB device present: PID 0x%04X", desc.idProduct);
+					}
+				}
+				libusb_free_device_list(list, 1);
+			} else {
+				LOG_DEBUG("USB scan failed: %s", libusb_error_name(cnt));
+			}
+		}
 		for(;;) {
 			if((handle->device = libusb_open_device_with_vid_pid(NULL, handle->vid, handle->pid)) != NULL) {
 				if(!open_logged) {
@@ -1196,11 +1216,44 @@ pongo_run_palera1n(usb_handle_t *handle) {
 	pongo_send_cmd(handle, "bootx\n");
 }
 
+#if defined(_WIN32) || defined(WIN32)
+static LONG WINAPI
+crash_handler(struct _EXCEPTION_POINTERS *info) {
+	DWORD code = info->ExceptionRecord->ExceptionCode;
+	void *addr = info->ExceptionRecord->ExceptionAddress;
+
+	if(myjb_log_file != NULL) {
+		fprintf(myjb_log_file, "[FATAL] unhandled exception 0x%08lX at %p\n", (unsigned long)code, addr);
+		fflush(myjb_log_file);
+	}
+	printf(RED_COLOR "[FATAL] crash 0x%08lX at %p (details in %s)" RESET_COLOR "\n", (unsigned long)code, addr, MYJB_LOG_NAME);
+	fflush(stdout);
+	return EXCEPTION_EXECUTE_HANDLER;
+}
+
+static void
+pause_if_own_console(void) {
+	DWORD pids[2];
+
+	if(GetConsoleProcessList(pids, 2) == 1) {
+		printf("Press Enter to close this window...");
+		fflush(stdout);
+		(void)getchar();
+	}
+}
+#endif
+
 int main(int argc, char **argv) {
 	(void)argc;
 	(void)argv;
 
+	myjb_log_init();
+#if defined(_WIN32) || defined(WIN32)
+	SetUnhandledExceptionFilter(crash_handler);
+#endif
+
 	LOG_RAINBOW("-=-=- myJB checkm8 tool (openra1n fork) -=-=-");
+	LOG_INFO("full log is written to %s next to the exe", MYJB_LOG_NAME);
 
 #ifdef _WIN32
 	LOG_WARN("Windows: checkm8 needs a driver with a real USB reset. Recommended: install UsbDk (https://github.com/daynix/UsbDk/releases) and reboot; or bind the libusbK driver via Zadig. WinUSB will hang at the heap spray");
@@ -1213,6 +1266,10 @@ int main(int argc, char **argv) {
 	LOG_INFO("Waiting for DFU mode device...");
 	if(!gaster_checkm8(&handle)) {
 		LOG_ERROR("checkm8 failed");
+		myjb_log_exit(EXIT_FAILURE);
+#if defined(_WIN32) || defined(WIN32)
+		pause_if_own_console();
+#endif
 		return EXIT_FAILURE;
 	}
 
@@ -1221,5 +1278,6 @@ int main(int argc, char **argv) {
 	pongo_run_palera1n(&handle);
 
 	LOG_INFO("Boot chain sent; device should now boot jailbroken (palera1n boot).");
+	myjb_log_exit(EXIT_SUCCESS);
 	return EXIT_SUCCESS;
 }

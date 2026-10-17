@@ -38,6 +38,14 @@ Khác biệt so với openra1n gốc:
 > Lưu ý: checkm8 là semi-tethered — mỗi lần reboot phải chạy lại tool.
 > iOS 15+ chỉ hỗ trợ chạy theo flow này; iOS 12–14 sẽ bổ sung sau (nhánh ra1npoc/legacy).
 
+## Debug log (khi cửa sổ tự đóng)
+
+Mọi log (bản không màu) được ghi vào `myjb_ktool.log` **cạnh exe**. Nếu tool
+crash, log có thêm dòng `[FATAL]` kèm mã lỗi; log kết thúc bằng `[EXIT] process
+exit code N`. Khi lỗi xảy ra mà chạy bằng double-click, cửa sổ sẽ dừng lại ở
+"Press Enter to close this window..." để kịp đọc. Gửi kèm `myjb_ktool.log` khi
+báo lỗi để chẩn đoán (đặc biệt với lỗi "tự thoát").
+
 ## Build
 
 CI: `.github/workflows/build-checkm8.yml` (windows + linux artifacts).
