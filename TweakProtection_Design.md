@@ -99,16 +99,49 @@ Lưu ý:
 
 ---
 
-## 3. Container `.myjb`
+## 3. Container `.myjb` — format v1 (đã chốt, khớp code P5)
+
+Số nguyên little-endian, packed (không padding).
 
 ```
-[ header: magic "MYJB", format_version, algo_id, flags ]
-[ manifest: CBOR/plist + sig Ed25519 ]
-    tweak_id, version, min_ios, filters (bundles/executables),
-    payload_hash, build_id, target_jb ("checkm8"|"taurine"|"any-myJB")
-[ payload: XChaCha20-Poly1305( dylib + resources ), nonce, tag ]
+offset        size          nội dung
+0             4             magic "MYJB"
+4             1             format_version = 1
+5             1             algo_id = 1 (Ed25519 + XChaCha20-Poly1305)
+6             2             header_flags (reserved = 0)
+8             4             manifest_size (u32 LE; v1 = 712)
+12            712           manifest (packed):
+                            u32 min_ios (major*100+minor, 0=any)
+                            u16 target_jb (0xFFFF=any-myJB, 2=amethyst, 1=checkm8, 3=taurine)
+                            u16 flags (reserved)
+                            u8 payload_hash[32]  — SHA-256(payload plaintext)
+                            u8 salt[32]          — HKDF salt
+                            u8 nonce[24]         — XChaCha20 nonce
+                            u64 payload_size
+                            char tweak_id[64] (NUL padded)
+                            char version[32]
+                            char filters[8][64] — fnmatch pattern, match exec path
+                                                  (full hoặc basename); rỗng = mọi process
+724           64            Ed25519 signature(header+manifest[0..724)) — private key server
+788           payload_size  ciphertext = XChaCha20-Poly1305(key=K_file, nonce=manifest.nonce,
+                                          AD=724 byte đầu, plaintext=payload)
+788+N         16            Poly1305 tag
 ```
 
+- Payload = dylib arm64/arm64e đã ký ad-hoc (`ldid -S`) **trước** khi đóng gói; loader
+  đọc cdhash từ LC_CODE_SIGNATURE → `jbserver_trustcache` → dlopen file staging → unlink.
+- Dẫn xuất khóa (loader thử `K_root` theo thứ tự, dùng cái decode thành công):
+  `K_file = HKDF-SHA256(ikm = K_root, salt = manifest.salt, info = "myjb-file-v1:" || tweak_id)`
+  1. `/var/mobile/Library/MyJB/kdev` (32B) — **K_device persistent** (server activation đẩy xuống sau này;
+     giai đoạn test: tự tạo file 32B random).
+  2. `/amethyst/.myjb_devkey` (32B) — chỉ dành cho test field.
+  3. `myjb_tweak_key` — session key từ attestation (container dựng theo từng session; dùng cho
+     luồng "server mã hóa tại thời điểm activation" — chưa có server).
+- Public key Ed25519 nhúng trong `myjb_loader.dylib`; override test bằng
+  `/amethyst/.myjb_pubkey` (32B raw). Key DEV hiện tại = RFC 8032 test key #1
+  (`d75a9801...`) — **bắt buộc thay bằng key thật khi phát hành**.
+- Builder: `tools/myjb_build.py` (thuần Python stdlib: Ed25519 reference, ChaCha20/Poly1305/
+  HChaCha20, HKDF-SHA256; `--selftest` chạy RFC 8032/8439/draft-xchacha/RFC 5869).
 - Manifest ký bằng private key của bạn (server-side khi build container).
 - Payload mã hóa bằng `K` per-device (1.1/1.2) → copy container sang máy khác: vô dụng.
 - `target_jb` cho phép chặn tuyệt đối cùng lúc: ví dụ tweak chỉ cho checkm8 path.
@@ -174,8 +207,13 @@ server revoke được".
 
 ## 8. Checklist triển khai
 
-1. Chốt format container `.myjb` + script build (server-side) + cặp khóa Ed25519.
-2. Viết `myjbd` (C/ObjC): verify manifest/token, unwrap K, decrypt, install, quản lý version/uninstall.
+1. ✅ Format container `.myjb` v1 + builder `tools/myjb_build.py` (thuần stdlib, `--selftest`
+   12/12 PASS RFC 8032/8439/draft-xchacha/5869; cross-check pycryptodome). Cặp khóa hiện là
+   DEV (RFC 8032 test key #1) — `--gen-key` khi phát hành.
+2. 🟡 `myjbd`/loader: bản loader embedded trong Amethyst basebin (P5) đã xong — parse/verify
+   Ed25519 (Monocypher), XChaCha20-Poly1305, HKDF-SHA256, staging + trustcache/sign qua
+   jbserver, dlopen + unlink (`Amethyst_myJB_Integration.md` §3 P5). Daemon đầy đủ
+   (install/quản lý version/uninstall/telemetry) còn ở giai đoạn sau.
 3. checkm8 path: KPF chèn secret + kênh export; bootstrap cài + launch myjbd.
 4. Taurine fork: chèn vào `post-exploit/` (+ `resources/`), quyết định giữ libhooker (6.1) hay thay Substitute/ElleKit (6.2).
 5. Server: `/build` (per-device + watermark), `/activate`, `/refresh`, `/revoke`, `/telemetry`.

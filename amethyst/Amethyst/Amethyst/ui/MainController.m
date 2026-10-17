@@ -81,6 +81,7 @@ int run_binary(char *path, char **args, char **env, bool wait, bool root);
         for (int i = 0; i < image_count; i++) {
             const char *name = _dyld_get_image_name(i);
             if (strcmp(name, "/usr/lib/base_hook.dylib") == 0 ||
+                strcmp(name, "/usr/lib/myjb_loader.dylib") == 0 ||
                 strcmp(name, "/usr/lib/pspawn_payload.dylib") == 0 ||
                 strcmp(name, "/usr/lib/pspawn_payload-stg2.dylib") == 0) {
                 goto jailbroken;

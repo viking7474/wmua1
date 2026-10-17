@@ -468,8 +468,28 @@ static int sandbox_check_by_audit_token_hook(audit_token_t at, const char *op, i
     return sandbox_check_by_audit_token_orig(at, op, filter, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7]);
 }
 
+static void myjb_prepare_dirs(void) {
+    static const char *dirs[] = {
+        "/var/jb/usr/lib/myjb",
+        "/var/jb/usr/lib/myjb/containers",
+        "/var/jb/usr/lib/myjb/run",
+        "/var/mobile/Library/MyJB",
+        "/var/mobile/Library/MyJB/containers",
+        "/var/mobile/Library/MyJB/run",
+        NULL
+    };
+    for (uint32_t i = 0; dirs[i] != NULL; i++) {
+        mkdir(dirs[i], 0755);
+    }
+    chmod("/var/jb/usr/lib/myjb/run", 01777);
+    chmod("/var/mobile/Library/MyJB/run", 01777);
+    chown("/var/mobile/Library/MyJB", 501, 501);
+    chown("/var/mobile/Library/MyJB/containers", 501, 501);
+}
+
 int init_server(void) {
     arc4random_buf(myjb_session_secret, sizeof(myjb_session_secret));
+    myjb_prepare_dirs();
     void *handle = dlopen("/usr/lib/system/libxpc.dylib", RTLD_NOW);
     if (handle == NULL) handle = RTLD_DEFAULT;
 

@@ -72,7 +72,7 @@ fallback `TweakInject.dylib`. `migrate_install()` còn tự thêm APT repo Sonar
 | P2 | ~~handoff.plist secret~~ | — | ❌ Bỏ — chuyển sang P3' |
 | P3' | Session secret trong RAM launchd_hook | `launchd_hook/src/jbserver.c` (`init_server`) | ✅ **ĐÃ LÀM** `arc4random_buf` 32B mỗi instance, không chạm đĩa |
 | P4 | **Gate load tweak** | `base_hook/src/main.c:22-24` (`init_tweaks`) | ✅ **ĐÃ LÀM**: attest → `myjb_tweak_key` |
-| P5 | Thay loader dylib | `base_hook/src/main.c:20-24` | `/usr/lib/myjb_loader.dylib` thay `libsonar/TweakInject` |
+| P5 | Thay loader dylib | `base_hook/src/main.c:22-24` | ✅ **ĐÃ LÀM** `/usr/lib/myjb_loader.dylib` (ưu tiên) thay `libsonar/TweakInject` |
 | P6 | dyld patch info | `common/include/basebin_common.h:53-75`, `jbutil/dyld.c:494-495` | Đổi `base_hook_str`, nhúng build-ID/watermark vào shellcode |
 | P7 | Env marker respawn launchd | `launchd_hook/src/loader.c:72-77` (`AMETHYST=1`) | Đổi tên env riêng myJB (anti-fake) |
 | P8 | postinst (bootstrap) | `basebins/resources/postinst:15-33` | Watermark + device marker; đây cũng là kênh OTA (`/amethyst/update`) |
@@ -122,11 +122,33 @@ if (myjb_attested == 0 && access("/amethyst/.myjb_verify", F_OK) == 0) return 0;
 - Marker `/amethyst/.myjb_verify` = bật chế độ strict (attest fail → cấm nạp tweak);
   chưa có marker = hành vi như cũ (giai đoạn chuyển tiếp).
 
-### P5. Loader dylib — chưa làm (bước kế tiếp)
+### P5. Loader `myjb_loader.dylib` — ✅ đã triển khai (v1)
 
-`myjb_loader`: đọc `/var/jb/usr/lib/myjb/*.myjb`, verify manifest Ed25519, giải mã
-payload XChaCha20-Poly1305 bằng key dẫn xuất từ `myjb_tweak_key` (per-session),
-map + dlopen. Tweak cũ không mã hóa vẫn có thể cho qua (tùy chính sách) hoặc chặn.
+Nguồn: `basebins/myjb_loader/` → cài `/usr/lib/myjb_loader.dylib` (staging tarball + deb OTA).
+Ctor chạy khi `base_hook init_tweaks()` dlopen (ưu tiên trước Sonar/TweakInject):
+
+1. Quét `/var/jb/usr/lib/myjb/containers` + `/var/mobile/Library/MyJB/containers` (`*.myjb`):
+   parse header/manifest, verify Ed25519 (pubkey nhúng — DEV = RFC 8032 test key #1, override
+   test bằng `/amethyst/.myjb_pubkey` 32B), check `min_ios` / `target_jb` / filters
+   (`fnmatch` với exec path + basename), dedupe theo `tweak_id`, sort theo tên file.
+2. Thử khóa theo thứ tự: `/var/mobile/Library/MyJB/kdev` → `/amethyst/.myjb_devkey` →
+   session key attest (`dlsym` handle base_hook: `myjb_tweak_key` + `myjb_attested`) →
+   `K_file = HKDF-SHA256(K_root, manifest.salt, "myjb-file-v1:" + tweak_id)`.
+3. Giải mã XChaCha20-Poly1305 (Monocypher 4.0.2 vendored, CC0/BSD-2), đối chiếu SHA-256 payload.
+4. Load: ghi staging `run/` (tên random, 1777) → `jbserver_process_library()` (sign/trustcache
+   qua jbserver — dylib variant của `process_binary`) → `dlopen(RTLD_NOW)` → `unlink`
+   (ciphertext-at-rest; plaintext chỉ thoáng qua trên đĩa, chết ngay sau dlopen).
+5. Hook engine: nếu chưa có `MSHookFunction` → thử `/var/jb/usr/lib/libhooker.dylib`
+   (RTLD_GLOBAL) trước khi load tweak (bỏ qua nếu không có).
+6. Legacy (không mã hóa): **tắt mặc định**; bật bằng env `MYJB_LEGACY=1` hoặc marker
+   `/amethyst/.myjb_legacy` → quét `/var/jb/Library/TweakInject` (+ `/var/mobile`) `*.dylib`
+   (v1 không đọc plist filter — legacy chỉ để chuyển tiếp).
+
+Knobs: `MYJB_DISABLE=1` hoặc `/amethyst/.myjb_disabled` (tắt hẳn); `MYJB_DEBUG=1` → log thêm
+vào `/var/mobile/Library/MyJB/loader.log`. Dirs `myjb/{containers,run}` + quyền (run 1777,
+MyJB thuộc mobile) do `myjb_prepare_dirs()` trong launchd_hook `init_server()` tạo (root);
+loader tự fallback nếu thiếu. Builder: `tools/myjb_build.py` (spec: `TweakProtection_Design.md`
+§3; có `--selftest` RFC 8032/8439/draft-xchacha/5869 + `--info` verify container).
 
 ### P6–P7. Binding vào binary của mình
 
@@ -194,6 +216,16 @@ Không có jbserver của mình (chưa JB / JB khác / binary lạ) → không a
 | `basebins/launchd_hook/src/jbserver.c` | + `myjb_session_secret`, + handler HMAC (`CCHmac`), + dispatch case, + sinh secret trong `init_server()` |
 | `basebins/base_hook/src/main.c` | + gate attest trong `init_tweaks()`, + export `myjb_tweak_key` / `myjb_attested` |
 | `basebins/libjailbreak/include/common.h` | + include `mach/*` (Xcode 26 coi implicit declaration là error), + enum sync `JBSERVER_CMD_MYJB_ATTEST` |
+| `basebins/myjb_loader/**` | **MỚI (P5)**: `include/myjb_format.h`, `include|src/myjb_crypto.*` (SHA-256/HKDF qua CommonCrypto), `include|src/myjb_container.*` (parse/verify/decrypt/fnmatch), `src/main.c`, `Makefile`, `vendor/` Monocypher 4.0.2 (CC0/BSD-2) |
+| `basebins/common/src/basebin_jbserver.c` + `include/basebin_jbserver.h` | + `jbserver_process_library()` (dylib variant: macho_load → `macho_should_sign` ? sign_binary : trustcache) |
+| `basebins/base_hook/src/main.c` | `init_tweaks()` dlopen `/usr/lib/myjb_loader.dylib` trước Sonar/TweakInject |
+| `basebins/launchd_hook/src/trustcache.c` | trustcache `/usr/lib/myjb_loader.dylib` (cả flow `created` + lock) |
+| `basebins/launchd_hook/src/util.c` | `update_jailbreak()` OTA: rename/remove/chmod/trustcache `myjb_loader.dylib` |
+| `basebins/launchd_hook/src/jbserver.c` | + `myjb_prepare_dirs()` (myjb/{containers,run} + quyền) trong `init_server()` |
+| `basebins/Makefile` + `.gitignore` | myjb_loader vào all/clean/staging (chmod 0755) + ignore artifact |
+| `amethyst/Amethyst/Amethyst/jailbreak/handoff.c` | `extract_basebins()` remove stale `myjb_loader.dylib`; `jailbreak_handoff()` `preload_basebin` (F_ADDFILESIGS + trust level 3) |
+| `amethyst/Amethyst/Amethyst/ui/MainController.m` | nhận diện jailbroken qua image `/usr/lib/myjb_loader.dylib` |
+| `tools/myjb_build.py` | **MỚI**: builder container v1 thuần stdlib (Ed25519/ChaCha20-Poly1305/HKDF ref impl) — `--selftest` 12/12 PASS, `--info`, `--gen-key` |
 
 Toolchain build (xác nhận từ Makefile): macOS + Xcode CLT
 (`xcrun --sdk iphoneos clang`, `-arch arm64e -arch arm64`, `-mios-version-min=12.0`,
@@ -204,12 +236,15 @@ Chưa compile được trên Windows — verify bằng GitHub Actions `macos-lat
 
 ## 8. Việc kế tiếp
 
-1. ✅ Workflow đã viết: `.github/workflows/build.yml` (macos-latest, cài tự động
-   `ldid` (brew, fallback binary Procursus), `dpkg`, `llvm-objcopy` từ brew llvm)
-   → artifacts: `basebins.tar` + `tnsv2_updater*.deb` + `Amethyst.ipa` (unsigned,
-   ký ad-hoc bằng ldid như `buildipa.sh`). Việc còn lại: fork repo, push, chạy.
-2. Viết `myjb_loader.dylib` (P5): parse `.myjb`, Ed25519 verify, XChaCha20-Poly1305
-   decrypt bằng `dlsym` `myjb_tweak_key` từ base_hook; thay chuỗi dlopen Sonar.
-3. Bật strict bằng marker `/amethyst/.myjb_verify`, test trên thiết bị A12/A13
-   (iOS 12/13): JB bình thường → tweak chạy; gỡ launchd_hook/jbserver → tweak bị chặn.
-4. Các điểm P6–P10 (watermark, rename, postinst, chimera shim).
+1. CI `build.yml` đã chạy xanh 1 lần (`basebins.zip` + `ipa.zip` trong thư mục gốc);
+   lần push tới sẽ là lần compile đầu của `myjb_loader.dylib` — cần theo dõi log
+   (rủi ro: chỉnh sửa C nhỏ, giống vụ libjailbreak/common.h).
+2. Test trên thiết bị thật A12/A13 (iOS 12/13):
+   - tạo cặp khóa DEV → nhúng pubkey khi build loader (thay RFC test key #1);
+   - tạo `/amethyst/.myjb_devkey` (32B) + container test bằng `tools/myjb_build.py`;
+   - JB bình thường → tweak chạy; gỡ launchd_hook/jbserver → tweak bị chặn
+     (bật strict bằng marker `/amethyst/.myjb_verify`).
+3. Các điểm P6–P10 (watermark dyld shellcode, đổi env/jbserver name/magic, postinst,
+   chặn Chimera shim `tnsv2_startup`).
+4. Sinh khóa production khi phát hành: `myjb_build.py --gen-key` → thay DEV key nhúng
+   trong `myjb_loader/src/main.c` (`myjb_embedded_pubkey`).

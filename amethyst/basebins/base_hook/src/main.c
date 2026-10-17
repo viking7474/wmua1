@@ -24,7 +24,9 @@ int init_tweaks(void) {
     if (myjb_attested == 0 && access("/amethyst/.myjb_verify", F_OK) == 0) return 0;
 
     const char *loader_path = NULL;
-    if (access("/usr/lib/libsonar.dylib", F_OK) == 0) {
+    if (access("/usr/lib/myjb_loader.dylib", F_OK) == 0) {
+        loader_path = "/usr/lib/myjb_loader.dylib";
+    } else if (access("/usr/lib/libsonar.dylib", F_OK) == 0) {
         loader_path = "/usr/lib/libsonar.dylib";
         setenv("SONAR_LOADER", "1", 1);
     } else if (access("/usr/lib/TweakInject.dylib", F_OK) == 0) {

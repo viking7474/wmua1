@@ -4,6 +4,7 @@ all:
 	$(MAKE) -C base_hook all
 	$(MAKE) -C libjailbreak all
 	$(MAKE) -C dyld_patch all
+	$(MAKE) -C myjb_loader all
 
 clean:
 	$(MAKE) -C jbutil clean
@@ -11,6 +12,7 @@ clean:
 	$(MAKE) -C base_hook clean
 	$(MAKE) -C libjailbreak clean
 	$(MAKE) -C dyld_patch clean
+	$(MAKE) -C myjb_loader clean
 
 	@rm -rf ./staging_tnsv2
 	@rm -rf ./staging_tnsv2_stub
@@ -32,6 +34,7 @@ tnsv2:
 	@cp -a ./launchd_hook/launchd_hook.dylib ./staging_tnsv2/amethyst/update/launchd_hook.dylib
 	@cp -a ./base_hook/base_hook.dylib ./staging_tnsv2/amethyst/update/base_hook.dylib
 	@cp -a ./libjailbreak/libjailbreak.dylib ./staging_tnsv2/amethyst/update/libjailbreak.dylib
+	@cp -a ./myjb_loader/myjb_loader.dylib ./staging_tnsv2/amethyst/update/myjb_loader.dylib
 	@cp -a ./dyld_patch/dyld_patch_text_12.bin ./staging_tnsv2/amethyst/update/dyld_patch_text_12.bin
 	@cp -a ./dyld_patch/dyld_patch_text_13.bin ./staging_tnsv2/amethyst/update/dyld_patch_text_13.bin
 
@@ -39,6 +42,7 @@ tnsv2:
 	@chmod 0755 ./staging_tnsv2/amethyst/update/launchd_hook.dylib
 	@chmod 0755 ./staging_tnsv2/amethyst/update/base_hook.dylib
 	@chmod 0755 ./staging_tnsv2/amethyst/update/libjailbreak.dylib
+	@chmod 0755 ./staging_tnsv2/amethyst/update/myjb_loader.dylib
 	@chmod 0755 ./staging_tnsv2/DEBIAN/postinst
 
 	@cd ./staging_tnsv2 && find . -name '.DS_Store' -type f -delete
@@ -55,6 +59,7 @@ package: clean all tnsv2
 	@cp -a ./launchd_hook/launchd_hook.dylib ./staging/amethyst/launchd_hook.dylib
 	@cp -a ./base_hook/base_hook.dylib ./staging/usr/lib/base_hook.dylib
 	@cp -a ./libjailbreak/libjailbreak.dylib ./staging/usr/lib/libjailbreak.dylib
+	@cp -a ./myjb_loader/myjb_loader.dylib ./staging/usr/lib/myjb_loader.dylib
 	@cp -a ./dyld_patch/dyld_patch_text_12.bin ./staging/amethyst/dyld_patch_text_12.bin
 	@cp -a ./dyld_patch/dyld_patch_text_13.bin ./staging/amethyst/dyld_patch_text_13.bin
 
@@ -62,6 +67,7 @@ package: clean all tnsv2
 	@chmod 0755 ./staging/amethyst/launchd_hook.dylib
 	@chmod 0755 ./staging/usr/lib/base_hook.dylib
 	@chmod 0755 ./staging/usr/lib/libjailbreak.dylib
+	@chmod 0755 ./staging/usr/lib/myjb_loader.dylib
 
 	@find ./staging -name '.DS_Store' -type f -delete
 	cd ./staging && COPYFILE_DISABLE=1 tar --numeric-owner -c --no-xattrs -f ../basebins.tar ./*

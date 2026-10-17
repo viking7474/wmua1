@@ -393,11 +393,13 @@ int update_jailbreak(void) {
     //remove("/amethyst/jbutil");
     remove("/usr/lib/base_hook.dylib");
     remove("/usr/lib/libjailbreak.dylib");
+    remove("/usr/lib/myjb_loader.dylib");
     sync();
 
     //rename("/amethyst/update/jbutil", "/amethyst/jbutil");
     rename("/amethyst/update/base_hook.dylib", "/usr/lib/base_hook.dylib");
     rename("/amethyst/update/libjailbreak.dylib", "/usr/lib/libjailbreak.dylib");
+    rename("/amethyst/update/myjb_loader.dylib", "/usr/lib/myjb_loader.dylib");
 
    // chown("/amethyst/jbutil", 0, 0);
     //chmod("/amethyst/jbutil", 0755);
@@ -405,11 +407,14 @@ int update_jailbreak(void) {
     chmod("/usr/lib/base_hook.dylib", 0755);
     chown("/usr/lib/libjailbreak.dylib", 0, 0);
     chmod("/usr/lib/libjailbreak.dylib", 0755);
+    chown("/usr/lib/myjb_loader.dylib", 0, 0);
+    chmod("/usr/lib/myjb_loader.dylib", 0755);
 
     trustcache_lock_add_binary("/amethyst/launchd_hook.dylib");
    // trustcache_lock_add_binary("/amethyst/jbutil");
     trustcache_lock_add_binary("/usr/lib/base_hook.dylib");
     trustcache_lock_add_binary("/usr/lib/libjailbreak.dylib");
+    trustcache_lock_add_binary("/usr/lib/myjb_loader.dylib");
 
     rmdir("/amethyst/update");
     chown("/amethyst", 0, 0);

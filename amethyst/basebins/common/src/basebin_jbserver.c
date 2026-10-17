@@ -252,6 +252,34 @@ jbserver_err_t jbserver_process_binary(const char *path) {
     return status;
 }
 
+jbserver_err_t jbserver_process_library(const char *path) {
+    if (path == NULL) return JBSERVER_ERR_INVALID_PATH;
+    macho_ctx_t *macho = macho_load(path);
+    if (macho == NULL) return JBSERVER_ERR_INVALID_PATH;
+    jbserver_err_t status = JBSERVER_ERR_SUCCESS;
+
+    for (uint32_t i = 0; i < macho->slice_count; i++) {
+        macho_slice_t *slice = &macho->slice_list[i];
+        if (slice->file_type != MH_DYLIB && slice->file_type != MH_BUNDLE) continue;
+
+        macho_signature_t *signature = macho_get_signature(slice);
+        if (signature == NULL) {
+            status = JBSERVER_ERR_INVALID_CD_HASH;
+            break;
+        }
+        if (macho_should_sign(macho, signature)) {
+            status = jbserver_sign_binary(path, signature->offset, signature->size, slice->offset, slice->file_type);
+        } else {
+            status = jbserver_trustcache(signature->hash, signature->hash_type);
+        }
+        macho_release_signature(signature);
+        if (status != JBSERVER_ERR_SUCCESS) break;
+    }
+
+    macho_release(macho);
+    return status;
+}
+
 jbserver_err_t jbserver_myjb_attest(const uint8_t *challenge, size_t challenge_len, uint8_t *response) {
     if (challenge == NULL || challenge_len == 0 || challenge_len > 256 || response == NULL) {
         return JBSERVER_ERR_INVALID_REQUEST;

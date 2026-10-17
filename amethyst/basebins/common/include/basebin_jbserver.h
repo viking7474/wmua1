@@ -73,5 +73,6 @@ jbserver_err_t jbserver_set_uid_gid(pid_t pid, uid_t uid, gid_t gid);
 jbserver_err_t jbserver_heartbeat(void);
 jbserver_err_t jbserver_myjb_attest(const uint8_t *challenge, size_t challenge_len, uint8_t *response);
 jbserver_err_t jbserver_process_binary(const char *path);
+jbserver_err_t jbserver_process_library(const char *path);
 
 #endif /* basebins_jbserver_h */

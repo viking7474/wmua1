@@ -116,6 +116,7 @@ static int extract_basebins(void) {
     remove_at_path("/amethyst/launchd_hook.dylib");
     remove_at_path("/usr/lib/base_hook.dylib");
     remove_at_path("/usr/lib/libjailbreak.dylib");
+    remove_at_path("/usr/lib/myjb_loader.dylib");
     
     if ((path = bundle_path("basebins.tar")) == NULL) goto done;
     if ((file = fopen(path, "rb")) == NULL) goto done;
@@ -263,6 +264,7 @@ int jailbreak_handoff(void) {
     preload_basebin("/amethyst/launchd_hook.dylib");
     preload_basebin("/usr/lib/base_hook.dylib");
     preload_basebin("/usr/lib/libjailbreak.dylib");
+    preload_basebin("/usr/lib/myjb_loader.dylib");
     remove_at_path("/amethyst/update");
 
     if (jbserver_heartbeat() == 0x1337) return 0;

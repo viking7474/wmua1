@@ -256,6 +256,7 @@ int trustcache_init(void) {
     if (created) {
         trustcache_add_binary("/usr/lib/dyld_patch");
         trustcache_add_binary("/usr/lib/libjailbreak.dylib");
+        trustcache_add_binary("/usr/lib/myjb_loader.dylib");
         trustcache_add_binary("/usr/lib/base_hook.dylib");
         trustcache_add_binary("/amethyst/jbutil");
         trustcache_add_binary("/amethyst/launchd_hook.dylib");
@@ -297,6 +298,7 @@ int trustcache_reset(void) {
     usleep(1000);
     trustcache_add_binary("/usr/lib/dyld_patch");
     trustcache_add_binary("/usr/lib/libjailbreak.dylib");
+    trustcache_add_binary("/usr/lib/myjb_loader.dylib");
     trustcache_add_binary("/usr/lib/base_hook.dylib");
     trustcache_add_binary("/amethyst/jbutil");
     trustcache_add_binary("/amethyst/launchd_hook.dylib");
