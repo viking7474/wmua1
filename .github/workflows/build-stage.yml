@@ -1,0 +1,54 @@
+name: build-stage
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'checkm8/ktool/stage/**'
+      - '.github/workflows/build-stage.yml'
+
+jobs:
+  stage:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcrun --sdk iphoneos --show-sdk-path
+          xcrun --sdk iphoneos clang --version | head -n 2
+
+      - name: Build myjb_stage (arm64, runs in checkra1n legacy ramdisk)
+        run: |
+          set -e
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          xcrun --sdk iphoneos clang -arch arm64 -target arm64-apple-ios11.0 \
+            -isysroot "$SDK" -O2 -Wall -Wextra \
+            -o myjb_stage checkm8/ktool/stage/myjb_stage.c
+
+      - name: Ad-hoc sign with entitlements
+        run: |
+          set -e
+          codesign -f -s - --entitlements checkm8/ktool/stage/myjb_stage.entitlements myjb_stage
+          codesign -dvv myjb_stage 2>&1 | head -n 12
+          codesign -d --entitlements :- myjb_stage
+
+      - name: Inspect Mach-O
+        run: |
+          otool -hv myjb_stage
+          otool -l myjb_stage | grep -E 'cmd |platform|minos|sdk ' | head -n 40
+          size myjb_stage
+          shasum -a 256 myjb_stage
+
+      - name: Base64 dump (retrieval from public logs without auth)
+        run: |
+          base64 -i myjb_stage | fold -w 300
+
+      - name: Upload (stage)
+        uses: actions/upload-artifact@v4
+        with:
+          name: myjb-stage-arm64
+          path: myjb_stage
+          if-no-files-found: error

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>platform-application</key>
+	<true/>
+	<key>task_for_pid-allow</key>
+	<true/>
+	<key>com.apple.private.vfs.snapshot</key>
+	<true/>
+	<key>com.apple.private.apfs.revert-to-snapshot</key>
+	<true/>
+	<key>com.apple.private.apfs.mount-root-writeable-at-shutdown</key>
+	<true/>
+	<key>com.apple.private.security.disk-device-access</key>
+	<true/>
+	<key>com.apple.private.security.system-mount-authority</key>
+	<true/>
+	<key>com.apple.private.diskimages.kext.user-client-access</key>
+	<true/>
+	<key>com.apple.private.iowatchdog.user-access</key>
+	<true/>
+	<key>com.apple.private.iokit.system-nvram-allow</key>
+	<true/>
+	<key>com.apple.rootless.storage.early_boot_mount</key>
+	<true/>
+	<key>com.apple.private.usbdevice.setdescription</key>
+	<true/>
+	<key>com.apple.private.allow-explicit-graphics-priority</key>
+	<true/>
+	<key>com.apple.lsapplicationworkspace.rebuildappdatabases</key>
+	<true/>
+	<key>com.apple.springboard.CFUserNotification</key>
+	<true/>
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.apple.checkra1n.loaderd</string>
+	</array>
+	<key>com.apple.security.temporary-exception.mach-register.global-name</key>
+	<array>
+		<string>com.apple.checkra1n.loaderd</string>
+	</array>
+	<key>com.apple.security.iokit-user-client-class</key>
+	<array>
+		<string>IOHDIXControllerUserClient</string>
+	</array>
+</dict>
+</plist>

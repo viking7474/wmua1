@@ -15,6 +15,8 @@ Khác biệt so với openra1n gốc:
 
 - [x] checkm8 (gaster) + boot PongoOS + chuỗi palera1n trong 1 binary
 - [x] Chuỗi legacy checkra1n 0.12.4b (`--legacy`) — chờ test trên máy iOS 12–14
+- [ ] myJB stage thay `/payload` trong legacy ramdisk (v0: chẩn đoán + chain
+      loaderd; v1: fakefs) — nguồn `stage/`, build CI `build-stage.yml`
 - [ ] Tích hợp myJB (loader/kdev) — xem `../../Checkm8_myJB_Integration.md` (C4–C6)
 - [ ] Payload pin + checksum (C2)
 
@@ -56,7 +58,9 @@ báo lỗi để chẩn đoán (đặc biệt với lỗi "tự thoát").
 
 ## Build
 
-CI: `.github/workflows/build-checkm8.yml` (windows + linux artifacts).
+CI: `.github/workflows/build-checkm8.yml` (windows + linux artifacts),
+`.github/workflows/build-stage.yml` (macOS; build `myjb_stage` arm64 ký ad-hoc
+kèm entitlements — stage chạy trong legacy ramdisk).
 
 Local:
 
