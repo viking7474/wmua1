@@ -2,6 +2,7 @@
 #include "basebin_jbserver.h"
 #include "myjb_format.h"
 #include "myjb_container.h"
+#include "myjb_hide.h"
 #include "monocypher.h"
 
 #include <fnmatch.h>
@@ -113,9 +114,9 @@ static uint32_t myjb_ios_version_code(void) {
 }
 
 static void *myjb_find_base_hook(void) {
-    uint32_t count = _dyld_image_count();
+    uint32_t count = myjb_real_image_count();
     for (uint32_t i = 0; i < count; i++) {
-        const char *name = _dyld_get_image_name(i);
+        const char *name = myjb_real_image_name(i);
         if (name == NULL) continue;
         if (strstr(name, "base_hook.dylib") == NULL) continue;
         return dlopen(name, RTLD_NOW);
@@ -407,4 +408,5 @@ static void myjb_start(void) {
 
 __attribute__((constructor)) static void myjb_loader_init(void) {
     myjb_start();
+    myjb_hide_start();
 }
