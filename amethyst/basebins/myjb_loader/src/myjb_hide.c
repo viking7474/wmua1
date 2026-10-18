@@ -962,29 +962,69 @@ static intptr_t myjb_hide_image_slide_hook(uint32_t index) {
 
 static const struct dyld_all_image_infos *(*orig_get_all_image_infos)(void) = NULL;
 
+static struct dyld_image_info g_fake_image_array[MYJB_HIDE_MAX_IMAGES];
+static struct dyld_all_image_infos g_fake_image_infos;
+static bool g_fake_image_infos_ready = false;
+
+static void myjb_hide_build_fake_infos(const struct dyld_all_image_infos *real) {
+    uint32_t visible = 0;
+    if (real != NULL && real->infoArray != NULL && real->infoArrayCount <= MYJB_HIDE_MAX_IMAGES) {
+        for (uint32_t i = 0; i < real->infoArrayCount; i++) {
+            const struct dyld_image_info *entry = &real->infoArray[i];
+            if (myjb_hide_image_path_hidden(entry->imageFilePath)) continue;
+            g_fake_image_array[visible++] = *entry;
+        }
+    }
+
+    if (!g_fake_image_infos_ready && real != NULL) {
+        size_t prefix = offsetof(struct dyld_all_image_infos, dyldVersion);
+        memcpy(&g_fake_image_infos, real, prefix);
+        g_fake_image_infos_ready = true;
+    }
+    g_fake_image_infos.infoArrayCount = visible;
+    g_fake_image_infos.infoArray = g_fake_image_array;
+}
+
 static const struct dyld_all_image_infos *myjb_hide_get_all_image_infos_hook(void) {
     const struct dyld_all_image_infos *real = orig_get_all_image_infos();
     if (real == NULL || real->infoArray == NULL || real->infoArrayCount > MYJB_HIDE_MAX_IMAGES) return real;
 
-    static struct dyld_image_info fake_array[MYJB_HIDE_MAX_IMAGES];
-    static struct dyld_all_image_infos fake_infos;
-    static bool fake_ready = false;
+    myjb_hide_build_fake_infos(real);
+    return &g_fake_image_infos;
+}
 
-    uint32_t visible = 0;
-    for (uint32_t i = 0; i < real->infoArrayCount; i++) {
-        const struct dyld_image_info *entry = &real->infoArray[i];
-        if (myjb_hide_image_path_hidden(entry->imageFilePath)) continue;
-        fake_array[visible++] = *entry;
+static void myjb_hide_apply_raw_image_infos(void) {
+    static bool logged = false;
+
+    task_dyld_info_data_t info = {0};
+    uint32_t count = TASK_DYLD_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_DYLD_INFO, (task_info_t)&info, &count) != KERN_SUCCESS ||
+        info.all_image_info_addr == 0) {
+        if (!logged) {
+            myjb_hide_log("myjb_hide: raw image infos: task_info failed");
+            logged = true;
+        }
+        return;
     }
 
-    if (!fake_ready) {
-        size_t prefix = offsetof(struct dyld_all_image_infos, dyldVersion);
-        memcpy(&fake_infos, real, prefix);
-        fake_ready = true;
+    struct dyld_all_image_infos *infos = (struct dyld_all_image_infos *)info.all_image_info_addr;
+    if (infos->infoArray == g_fake_image_array) return;
+    if (infos->infoArray == NULL || infos->infoArrayCount == 0 ||
+        infos->infoArrayCount > MYJB_HIDE_MAX_IMAGES) return;
+
+    uint32_t real_count = infos->infoArrayCount;
+    myjb_hide_build_fake_infos(infos);
+
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    infos->infoArrayCount = g_fake_image_infos.infoArrayCount;
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    infos->infoArray = g_fake_image_array;
+
+    if (!logged) {
+        myjb_hide_log("myjb_hide: raw image infos filtered %u/%u",
+                      g_fake_image_infos.infoArrayCount, real_count);
+        logged = true;
     }
-    fake_infos.infoArrayCount = visible;
-    fake_infos.infoArray = fake_array;
-    return &fake_infos;
 }
 
 static bool myjb_hide_caller_trusted(void *return_address) {
@@ -1162,6 +1202,8 @@ static void myjb_hide_uikit_added(const struct mach_header *header, intptr_t sli
     (void)header;
     (void)slide;
 
+    myjb_hide_apply_raw_image_infos();
+
     myjb_hide_load_objc();
     if (g_objc_getClass == NULL) return;
 
@@ -1238,6 +1280,7 @@ void myjb_hide_start(void) {
 
     myjb_hide_install_file_hooks();
     myjb_hide_install_image_hooks();
+    myjb_hide_apply_raw_image_infos();
     myjb_hide_install_guard_hooks();
 
     myjb_hide_log("myjb_hide: %u hook(s) installed", g_hook_table_count);
