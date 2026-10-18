@@ -912,6 +912,7 @@ static bool myjb_hide_image_path_hidden(const char *name) {
         if (strcasecmp(base, myjb_hide_image_names[i]) == 0) return true;
     }
     if (strncasecmp(base, "myjb-", 5) == 0) return true;
+    if (strncasecmp(base, "cy-", 3) == 0) return true;
     return false;
 }
 
@@ -966,13 +967,35 @@ static struct dyld_image_info g_fake_image_array[MYJB_HIDE_MAX_IMAGES];
 static struct dyld_all_image_infos g_fake_image_infos;
 static bool g_fake_image_infos_ready = false;
 
+static bool myjb_hide_str_has_ci(const char *haystack, const char *needle) {
+    if (haystack == NULL || needle == NULL || needle[0] == '\0') return false;
+    size_t nlen = strlen(needle);
+    for (const char *at = haystack; at[0] != '\0'; at++) {
+        if (strncasecmp(at, needle, nlen) == 0) return true;
+    }
+    return false;
+}
+
+static uint32_t g_image_scan_logs = 0;
+
+static void myjb_hide_log_image_scan(const char *path, bool hidden) {
+    if (path == NULL || g_image_scan_logs >= 24) return;
+    if (!hidden && !myjb_hide_str_has_ci(path, "caches") && !myjb_hide_str_has_ci(path, "cy-")) return;
+    g_image_scan_logs++;
+    myjb_hide_log("myjb_hide: image scan hidden=%d %s", hidden ? 1 : 0, path);
+}
+
 static void myjb_hide_build_fake_infos(const struct dyld_all_image_infos *real) {
     uint32_t visible = 0;
     if (real != NULL && real->infoArray != NULL && real->infoArrayCount <= MYJB_HIDE_MAX_IMAGES) {
         for (uint32_t i = 0; i < real->infoArrayCount && visible < MYJB_HIDE_MAX_IMAGES; i++) {
             const struct dyld_image_info *entry = &real->infoArray[i];
             if (entry->imageLoadAddress == NULL || entry->imageFilePath == NULL) continue;
-            if (myjb_hide_image_path_hidden(entry->imageFilePath)) continue;
+            if (myjb_hide_image_path_hidden(entry->imageFilePath)) {
+                myjb_hide_log_image_scan(entry->imageFilePath, true);
+                continue;
+            }
+            myjb_hide_log_image_scan(entry->imageFilePath, false);
             g_fake_image_array[visible++] = *entry;
         }
     }
@@ -1051,6 +1074,11 @@ static void myjb_hide_refresh_raw_image_infos(void) {
 static kern_return_t myjb_hide_task_info_hook(task_name_t task, task_flavor_t flavor, task_info_t info_out, mach_msg_type_number_t *count) {
     kern_return_t kr = orig_task_info(task, flavor, info_out, count);
     if (kr == KERN_SUCCESS && flavor == TASK_DYLD_INFO && task == mach_task_self()) {
+        static uint32_t fetch_logs = 0;
+        if (fetch_logs < 2) {
+            fetch_logs++;
+            myjb_hide_log("myjb_hide: task_info dyld fetch");
+        }
         myjb_hide_refresh_raw_image_infos();
     }
     return kr;
