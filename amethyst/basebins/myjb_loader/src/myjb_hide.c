@@ -969,16 +969,16 @@ static bool g_fake_image_infos_ready = false;
 static void myjb_hide_build_fake_infos(const struct dyld_all_image_infos *real) {
     uint32_t visible = 0;
     if (real != NULL && real->infoArray != NULL && real->infoArrayCount <= MYJB_HIDE_MAX_IMAGES) {
-        for (uint32_t i = 0; i < real->infoArrayCount; i++) {
+        for (uint32_t i = 0; i < real->infoArrayCount && visible < MYJB_HIDE_MAX_IMAGES; i++) {
             const struct dyld_image_info *entry = &real->infoArray[i];
+            if (entry->imageLoadAddress == NULL || entry->imageFilePath == NULL) continue;
             if (myjb_hide_image_path_hidden(entry->imageFilePath)) continue;
             g_fake_image_array[visible++] = *entry;
         }
     }
 
     if (!g_fake_image_infos_ready && real != NULL) {
-        size_t prefix = offsetof(struct dyld_all_image_infos, dyldVersion);
-        memcpy(&g_fake_image_infos, real, prefix);
+        memcpy(&g_fake_image_infos, real, sizeof(g_fake_image_infos));
         g_fake_image_infos_ready = true;
     }
     g_fake_image_infos.infoArrayCount = visible;
@@ -995,6 +995,8 @@ static const struct dyld_all_image_infos *myjb_hide_get_all_image_infos_hook(voi
 
 static void myjb_hide_apply_raw_image_infos(void) {
     static bool logged = false;
+    static uint32_t refilter_logs = 0;
+    static uint32_t last_real_count = 0;
 
     task_dyld_info_data_t info = {0};
     uint32_t count = TASK_DYLD_INFO_COUNT;
@@ -1008,7 +1010,6 @@ static void myjb_hide_apply_raw_image_infos(void) {
     }
 
     struct dyld_all_image_infos *infos = (struct dyld_all_image_infos *)info.all_image_info_addr;
-    if (infos->infoArray == g_fake_image_array) return;
     if (infos->infoArray == NULL || infos->infoArrayCount == 0 ||
         infos->infoArrayCount > MYJB_HIDE_MAX_IMAGES) return;
 
@@ -1024,7 +1025,15 @@ static void myjb_hide_apply_raw_image_infos(void) {
         myjb_hide_log("myjb_hide: raw image infos filtered %u/%u",
                       g_fake_image_infos.infoArrayCount, real_count);
         logged = true;
+        last_real_count = real_count;
+        return;
     }
+    if (real_count != last_real_count && refilter_logs < 3) {
+        myjb_hide_log("myjb_hide: raw image infos refiltered %u/%u",
+                      g_fake_image_infos.infoArrayCount, real_count);
+        refilter_logs++;
+    }
+    last_real_count = real_count;
 }
 
 static bool myjb_hide_caller_trusted(void *return_address) {
