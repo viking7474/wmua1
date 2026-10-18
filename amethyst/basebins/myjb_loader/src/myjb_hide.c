@@ -765,16 +765,31 @@ static IMP g_orig_canOpenURL = NULL;
 static IMP g_orig_openURL = NULL;
 static IMP g_orig_openURL_options = NULL;
 
+static void *g_objc_msgSend = NULL;
+static void *g_objc_getClass = NULL;
+static void *g_sel_registerName = NULL;
+static void *g_class_getInstanceMethod = NULL;
+static void *g_method_setImplementation = NULL;
+
+static void myjb_hide_load_objc(void) {
+    if (g_objc_msgSend != NULL) return;
+    g_objc_msgSend = dlsym(RTLD_DEFAULT, "objc_msgSend");
+    g_objc_getClass = dlsym(RTLD_DEFAULT, "objc_getClass");
+    g_sel_registerName = dlsym(RTLD_DEFAULT, "sel_registerName");
+    g_class_getInstanceMethod = dlsym(RTLD_DEFAULT, "class_getInstanceMethod");
+    g_method_setImplementation = dlsym(RTLD_DEFAULT, "method_setImplementation");
+}
+
 static bool myjb_hide_url_scheme_hidden(id url) {
-    if (url == NULL) return false;
+    if (url == NULL || g_objc_msgSend == NULL || g_sel_registerName == NULL) return false;
 
-    SEL scheme_sel = sel_registerName("scheme");
-    if (!((BOOL (*)(id, SEL, SEL))objc_msgSend)(url, sel_registerName("respondsToSelector:"), scheme_sel)) return false;
+    SEL scheme_sel = ((SEL (*)(const char *))g_sel_registerName)("scheme");
+    if (!((BOOL (*)(id, SEL, SEL))g_objc_msgSend)(url, ((SEL (*)(const char *))g_sel_registerName)("respondsToSelector:"), scheme_sel)) return false;
 
-    id scheme = ((id (*)(id, SEL))objc_msgSend)(url, scheme_sel);
+    id scheme = ((id (*)(id, SEL))g_objc_msgSend)(url, scheme_sel);
     if (scheme == NULL) return false;
 
-    const char *value = ((const char *(*)(id, SEL))objc_msgSend)(scheme, sel_registerName("UTF8String"));
+    const char *value = ((const char *(*)(id, SEL))g_objc_msgSend)(scheme, ((SEL (*)(const char *))g_sel_registerName)("UTF8String"));
     if (value == NULL) return false;
 
     for (uint32_t i = 0; myjb_hide_url_schemes[i] != NULL; i++) {
@@ -805,16 +820,20 @@ static void myjb_hide_openURL_options_hook(id self, SEL cmd, id url, id options,
 
 static void myjb_hide_swizzle(Class cls, const char *selector, IMP replacement, IMP *original) {
     if (*original != NULL) return;
-    Method method = class_getInstanceMethod(cls, sel_registerName(selector));
+    if (g_class_getInstanceMethod == NULL || g_method_setImplementation == NULL || g_sel_registerName == NULL) return;
+    Method method = ((Method (*)(Class, SEL))g_class_getInstanceMethod)(cls, ((SEL (*)(const char *))g_sel_registerName)(selector));
     if (method == NULL) return;
-    *original = method_setImplementation(method, replacement);
+    *original = ((IMP (*)(Method, IMP))g_method_setImplementation)(method, replacement);
 }
 
 static void myjb_hide_uikit_added(const struct mach_header *header, intptr_t slide) {
     (void)header;
     (void)slide;
 
-    Class cls = objc_getClass("UIApplication");
+    myjb_hide_load_objc();
+    if (g_objc_getClass == NULL) return;
+
+    Class cls = ((Class (*)(const char *))g_objc_getClass)("UIApplication");
     if (cls == NULL) return;
 
     myjb_hide_swizzle(cls, "canOpenURL:", (IMP)myjb_hide_canOpenURL_hook, &g_orig_canOpenURL);
