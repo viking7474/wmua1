@@ -1013,6 +1013,7 @@ static uint32_t g_image_scan_cy_hidden_logs = 0;
 static uint32_t g_image_scan_cy_visible_logs = 0;
 static uint32_t g_image_scan_uuid_logs = 0;
 static uint32_t g_image_scan_empty_logs = 0;
+static uint32_t g_image_scan_library_logs = 0;
 
 static void myjb_hide_log_image_scan(const char *path, bool hidden) {
     if (path == NULL) return;
@@ -1057,6 +1058,15 @@ static void myjb_hide_build_fake_infos(const struct dyld_all_image_infos *real) 
             }
             if (myjb_hide_image_path_hidden(entry->imageFilePath)) {
                 myjb_hide_log_image_scan(entry->imageFilePath, true);
+                continue;
+            }
+            if (entry->imageFilePath[0] != '/' ||
+                strncmp(entry->imageFilePath, "/Library/", 9) == 0 ||
+                strncmp(entry->imageFilePath, "/private/Library/", 17) == 0) {
+                if (g_image_scan_library_logs < 16) {
+                    g_image_scan_library_logs++;
+                    myjb_hide_log("myjb_hide: image scan hidden=4 path=[%s]", entry->imageFilePath);
+                }
                 continue;
             }
             myjb_hide_log_image_scan(entry->imageFilePath, false);
@@ -1425,6 +1435,7 @@ void myjb_hide_start(void) {
 
     myjb_hide_load_env_keep();
     myjb_hide_log("myjb_hide: active in %s", exec_path);
+    myjb_hide_log("myjb_hide: rules rev 4 (uuid, empty-path, /Library guard)");
 
     myjb_hide_scrub_environ();
 
