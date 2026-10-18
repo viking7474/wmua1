@@ -16,6 +16,17 @@ static bool is_interpreted_script(const char *path) {
     return (data[0] == '#' && data[1] == '!');
 }
 
+static bool substrate_insert(const char *entry) {
+    const char *base = strrchr(entry, '/');
+    base = (base != NULL) ? base + 1 : entry;
+    if (strncmp(base, "cy-", 3) == 0) return true;
+    if (strstr(base, "SubstrateLoader") != NULL) return true;
+    if (strstr(base, "SubstrateInserter") != NULL) return true;
+    if (strstr(base, "SubstrateBootstrap") != NULL) return true;
+    if (strstr(entry, "/substrate/") != NULL) return true;
+    return false;
+}
+
 static bool loader_blocked(const char *path, char **argv, posix_spawnattr_t *attr) {
     if (path == NULL || path[0] == '\0' || access("/usr/lib/base_hook.dylib", F_OK) != 0) return true;
     if (attr != NULL && *attr != NULL) {
@@ -79,18 +90,59 @@ static int spawn_handler(pid_t *pid, const char *path, posix_spawn_file_actions_
     char **target_env = env_copy(env, 4);
     char **dyld_insert = env_get(target_env, "DYLD_INSERT_LIBRARIES");
     bool inject_hook = true;
+    bool strip_substrate = (target_path != NULL) &&
+                           (strstr(target_path, ".app/") != NULL) &&
+                           (access("/amethyst/.myjb_substrate_keep", F_OK) != 0);
 
     if (dyld_insert != NULL && *dyld_insert != NULL) {
-        char *copy = strdup((*dyld_insert) + strlen("DYLD_INSERT_LIBRARIES="));
+        char *old_value = (*dyld_insert) + strlen("DYLD_INSERT_LIBRARIES=");
+        char *copy = strdup(old_value);
         char *current = NULL;
 
         if (copy != NULL) {
+            char *list[64] = {0};
+            uint32_t list_count = 0;
+            bool stripped = false;
+            bool overflow = false;
+
             char *temp = copy;
             while ((current = strsep(&temp, ":")) != NULL) {
                 if (current[0] == '\0') continue;
-                if (strcmp(current, "/usr/lib/base_hook.dylib") == 0) {
-                    inject_hook = false;
+                if (strcmp(current, "/usr/lib/base_hook.dylib") == 0) inject_hook = false;
+                if (strip_substrate && substrate_insert(current)) {
+                    stripped = true;
                     continue;
+                }
+                if (list_count < 64) {
+                    list[list_count++] = current;
+                } else {
+                    overflow = true;
+                    break;
+                }
+            }
+
+            if (stripped && !overflow) {
+                char *rebuilt = NULL;
+                if (list_count == 0) {
+                    rebuilt = strdup("/usr/lib/base_hook.dylib");
+                    inject_hook = false;
+                } else {
+                    size_t size = 1;
+                    for (uint32_t i = 0; i < list_count; i++) size += strlen(list[i]) + 1;
+                    rebuilt = malloc(size);
+                    if (rebuilt != NULL) {
+                        rebuilt[0] = '\0';
+                        for (uint32_t i = 0; i < list_count; i++) {
+                            if (i > 0) strcat(rebuilt, ":");
+                            strcat(rebuilt, list[i]);
+                        }
+                    }
+                }
+                if (rebuilt != NULL) {
+                    fprintf(stderr, "[base_hook] substrate insert removed for %s: %s -> %s\n",
+                            target_path, old_value, rebuilt);
+                    env_set(target_env, "DYLD_INSERT_LIBRARIES", rebuilt, false);
+                    free(rebuilt);
                 }
             }
             free(copy);
