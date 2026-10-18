@@ -1212,6 +1212,15 @@ static void myjb_hide_apply_raw_image_infos(void) {
     if (infos->infoArray == NULL || infos->infoArrayCount == 0 ||
         infos->infoArrayCount > MYJB_HIDE_MAX_IMAGES) return;
 
+    {
+        static const char *last_src = NULL;
+        const char *src = (infos->infoArray == g_fake_image_array) ? "fake" : "real";
+        if (last_src != src) {
+            myjb_hide_log("myjb_hide: apply src=%s count=%u", src, infos->infoArrayCount);
+            last_src = src;
+        }
+    }
+
     uint32_t real_count = infos->infoArrayCount;
     myjb_hide_build_fake_infos(infos);
 
@@ -1262,6 +1271,53 @@ static kern_return_t myjb_hide_task_info_hook(task_name_t task, task_flavor_t fl
         myjb_hide_refresh_raw_image_infos();
     }
     return kr;
+}
+
+static void myjb_hide_snapshot(const char *why) {
+    myjb_hide_refresh_raw_image_infos();
+    uint32_t fake_count = g_fake_image_infos_ready ? g_fake_image_infos.infoArrayCount : 0;
+    uint32_t cy_hits = 0, caches_hits = 0, logged = 0;
+    for (uint32_t i = 0; i < fake_count; i++) {
+        const struct dyld_image_info *e = &g_fake_image_array[i];
+        const char *p = e->imageFilePath;
+        if (myjb_hide_header_uuid_hidden(e->imageLoadAddress)) {
+            cy_hits++;
+            if (logged < 4) {
+                logged++;
+                myjb_hide_log("myjb_hide: snapshot %s fake uuid hit idx=%u load=%p path=[%s]",
+                              why, i, e->imageLoadAddress, p != NULL ? p : "NULL");
+            }
+            continue;
+        }
+        if (p != NULL && myjb_hide_str_has_ci(p, "caches")) {
+            caches_hits++;
+            if (logged < 4) {
+                logged++;
+                myjb_hide_log("myjb_hide: snapshot %s fake caches idx=%u load=%p path=[%s]",
+                              why, i, e->imageLoadAddress, p);
+            }
+        }
+    }
+    const struct dyld_image_info *last = fake_count > 0 ? &g_fake_image_array[fake_count - 1] : NULL;
+    myjb_hide_log("myjb_hide: snapshot %s fake_count=%u cy_in_fake=%u caches_in_fake=%u last_load=%p last_path=[%s]",
+                  why, fake_count, cy_hits, caches_hits,
+                  last != NULL ? last->imageLoadAddress : NULL,
+                  last != NULL && last->imageFilePath != NULL ? last->imageFilePath : "NULL");
+}
+
+static void (*orig_abort_fn)(void) = NULL;
+static void (*orig_exit_fn)(int) = NULL;
+
+static void myjb_hide_abort_hook(void) {
+    myjb_hide_snapshot("abort");
+    if (orig_abort_fn != NULL) orig_abort_fn();
+    for (;;) { }
+}
+
+static void myjb_hide_exit_hook(int status) {
+    myjb_hide_snapshot("exit");
+    if (orig_exit_fn != NULL) orig_exit_fn(status);
+    for (;;) { }
 }
 
 static bool myjb_hide_caller_trusted(void *return_address) {
@@ -1376,6 +1432,8 @@ static void myjb_hide_install_guard_hooks(void) {
     orig_dlopen_preflight = myjb_hide_install_hook("dlopen_preflight", (void *)myjb_hide_dlopen_preflight_hook);
     orig_dlsym = myjb_hide_install_hook("dlsym", (void *)myjb_hide_dlsym_hook);
     orig_task_info = myjb_hide_install_hook("task_info", (void *)myjb_hide_task_info_hook);
+    orig_abort_fn = myjb_hide_install_hook("abort", (void *)myjb_hide_abort_hook);
+    orig_exit_fn = myjb_hide_install_hook("exit", (void *)myjb_hide_exit_hook);
 }
 
 static IMP g_orig_canOpenURL = NULL;
