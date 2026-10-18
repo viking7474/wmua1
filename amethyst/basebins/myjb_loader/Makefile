@@ -4,7 +4,7 @@ SDK = $(shell xcrun --sdk iphoneos --show-sdk-path)
 LDID = $(shell which ldid)
 
 CFLAGS := -I./include -I./vendor -I../common/include -isysroot $(SDK) -mios-version-min=12.0 -arch arm64e -arch arm64 \
-	-Werror -Wall -Wno-unused-variable -Wno-unused-function -fvisibility=hidden -fvisibility-inlines-hidden
+	-Werror -Wall -Wno-unused-variable -Wno-unused-function -fvisibility=hidden -fvisibility-inlines-hidden -fblocks
 LDFLAGS := -L$(SDK)/usr/lib -lc -lSystem -dynamiclib
 
 SRC = $(wildcard src/*.c) $(wildcard vendor/*.c)
