@@ -18,10 +18,19 @@
  * legacy_ramdisk.bin (checkra1n 0.12.4b "legacy" chain, iOS 12.0–14.8.1).
  *
  * Boot environment: the kernel boots the ramdisk as root; /usr/lib/dyld is
- * checkra1n's fake dyld (waits for rootfs, reverts the iOS 14 boot snapshot,
- * patches the real dyld), then /payload.dylib (stage4entry, injected into
- * fakelaunchd via DYLD_INSERT_LIBRARIES) remounts the ramdisk rw and spawns
- * /payload. This stage runs in the exact environment loaderd used to run in.
+ * checkra1n's fake dyld (waits for rootfs, reverts the iOS 14 boot snapshot),
+ * it execs /patch_dyld.ios (args: <input=/usr/lib/dyld> <output=/binpack/lib/
+ * dyld> <exec=/payload>), which patches dyld and then execs /payload via
+ * "/bin/sh -c 'exec \"$0\" \"$@\"' /payload" — as PID 1. Later /payload.dylib
+ * (injected into the real launchd via DYLD_INSERT_LIBRARIES) remounts the
+ * ramdisk and posix_spawns /payload with argv={"stage4entry"}.
+ *
+ * loaderd (the stock /payload) is a multi-call binary dispatching on argv[0]:
+ * launchd | save_kerninfo | ldload | AppImageMounter | checkra1nd | stage4entry
+ * — with getpid()==1 force-selecting "launchd"; anything else exits 1 with
+ * "this is a checkra1n internal utility, do not run".  This stage therefore
+ * must forward argv UNCHANGED (argv[0] included) when chaining to /payload.real,
+ * or the second (stage4entry) invocation dies in that guard.
  *
  * v0 (this file): diagnostics only — dump the environment to /dev/console
  * (visible in verbose boot) and chain to the stock loaderd, shipped by the
@@ -179,11 +188,11 @@ int main(int argc, char **argv) {
 		STAGE("calloc failed");
 		return 1;
 	}
-	fwd[0] = (char *)REAL_LOADER;
+	fwd[0] = (argc > 0 && argv[0]) ? argv[0] : (char *)REAL_LOADER;
 	for (i = 1; i < argc; i++)
 		fwd[i] = argv[i];
 
-	STAGE("chaining to %s", REAL_LOADER);
+	STAGE("chaining to %s (argv[0]=%s, pid=%d)", REAL_LOADER, fwd[0], getpid());
 	execv(REAL_LOADER, fwd);
 	STAGE("execv(%s) failed, errno=%d (%s)", REAL_LOADER, errno, strerror(errno));
 	return 1;
