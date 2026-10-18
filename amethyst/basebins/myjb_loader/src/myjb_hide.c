@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <dlfcn.h>
+#include <mach-o/loader.h>
 #include <sys/attr.h>
 #include <sys/mount.h>
 #include <sys/sysctl.h>
@@ -904,8 +905,30 @@ const struct mach_header *myjb_real_image_header(uint32_t index) {
     return _dyld_get_image_header(index);
 }
 
+static const uint8_t myjb_hide_cy_uuid[16] = {
+    0xc9, 0xd0, 0xdd, 0x09, 0x0e, 0xbd, 0x33, 0x64,
+    0xb6, 0xb6, 0xd3, 0xba, 0xeb, 0x78, 0x8d, 0xbf,
+};
+
+static bool myjb_hide_header_uuid_hidden(const struct mach_header *header) {
+    if (header == NULL || header->magic != MH_MAGIC_64) return false;
+    const struct mach_header_64 *h64 = (const struct mach_header_64 *)header;
+    const uint8_t *cmd = (const uint8_t *)header + sizeof(struct mach_header_64);
+    for (uint32_t i = 0; i < h64->ncmds; i++) {
+        const struct load_command *lc = (const struct load_command *)cmd;
+        if (lc->cmdsize < sizeof(struct load_command)) return false;
+        if (lc->cmd == LC_UUID && lc->cmdsize >= sizeof(struct uuid_command)) {
+            const struct uuid_command *uc = (const struct uuid_command *)lc;
+            return memcmp(uc->uuid, myjb_hide_cy_uuid, 16) == 0;
+        }
+        cmd += lc->cmdsize;
+    }
+    return false;
+}
+
 static bool myjb_hide_image_path_hidden(const char *name) {
     if (name == NULL) return false;
+    if (name[0] == '\0') return true;
     if (myjb_hide_path_hidden(name)) return true;
 
     const char *base = name + myjb_hide_basename_offset(name);
@@ -921,6 +944,7 @@ static inline int myjb_hide_visible_lookup(uint32_t index, uint32_t *real_out) {
     uint32_t real_count = myjb_real_image_count();
     uint32_t visible = 0;
     for (uint32_t i = 0; i < real_count; i++) {
+        if (myjb_hide_header_uuid_hidden(myjb_real_image_header(i))) continue;
         const char *name = myjb_real_image_name(i);
         if (myjb_hide_image_path_hidden(name)) continue;
         if (visible == index) {
@@ -939,6 +963,7 @@ static uint32_t myjb_hide_image_count_hook(void) {
     uint32_t real_count = myjb_real_image_count();
     uint32_t visible = 0;
     for (uint32_t i = 0; i < real_count; i++) {
+        if (myjb_hide_header_uuid_hidden(myjb_real_image_header(i))) continue;
         const char *name = myjb_real_image_name(i);
         if (myjb_hide_image_path_hidden(name)) continue;
         visible++;
@@ -986,6 +1011,8 @@ static bool myjb_hide_str_has_ci(const char *haystack, const char *needle) {
 static uint32_t g_image_scan_hidden_logs = 0;
 static uint32_t g_image_scan_cy_hidden_logs = 0;
 static uint32_t g_image_scan_cy_visible_logs = 0;
+static uint32_t g_image_scan_uuid_logs = 0;
+static uint32_t g_image_scan_empty_logs = 0;
 
 static void myjb_hide_log_image_scan(const char *path, bool hidden) {
     if (path == NULL) return;
@@ -1012,7 +1039,22 @@ static void myjb_hide_build_fake_infos(const struct dyld_all_image_infos *real) 
     if (real != NULL && real->infoArray != NULL && real->infoArrayCount <= MYJB_HIDE_MAX_IMAGES) {
         for (uint32_t i = 0; i < real->infoArrayCount && visible < MYJB_HIDE_MAX_IMAGES; i++) {
             const struct dyld_image_info *entry = &real->infoArray[i];
-            if (entry->imageLoadAddress == NULL || entry->imageFilePath == NULL) continue;
+            if (entry->imageLoadAddress == NULL) continue;
+            if (myjb_hide_header_uuid_hidden(entry->imageLoadAddress)) {
+                if (g_image_scan_uuid_logs < 8) {
+                    g_image_scan_uuid_logs++;
+                    myjb_hide_log("myjb_hide: image scan hidden=2 path=[%s]",
+                                  entry->imageFilePath != NULL ? entry->imageFilePath : "NULL");
+                }
+                continue;
+            }
+            if (entry->imageFilePath == NULL || entry->imageFilePath[0] == '\0') {
+                if (g_image_scan_empty_logs < 8) {
+                    g_image_scan_empty_logs++;
+                    myjb_hide_log("myjb_hide: image scan hidden=3 (empty path)");
+                }
+                continue;
+            }
             if (myjb_hide_image_path_hidden(entry->imageFilePath)) {
                 myjb_hide_log_image_scan(entry->imageFilePath, true);
                 continue;
