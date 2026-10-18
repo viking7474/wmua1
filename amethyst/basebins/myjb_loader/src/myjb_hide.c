@@ -12,6 +12,7 @@
 #include <sys/sysctl.h>
 #include <syslog.h>
 #include <time.h>
+#include <signal.h>
 
 #define MYJB_HIDE_MAX_HOOKS 64
 #define MYJB_HIDE_MAX_IMAGES 2048
@@ -1307,6 +1308,14 @@ static void myjb_hide_snapshot(const char *why) {
 
 static void (*orig_abort_fn)(void) = NULL;
 static void (*orig_exit_fn)(int) = NULL;
+static int (*orig_kill_fn)(int, int) = NULL;
+static int (*orig_raise_fn)(int) = NULL;
+static int (*orig_pthread_kill_fn)(void *, int) = NULL;
+static void (*orig_underscore_exit_fn)(int) = NULL;
+
+static bool myjb_hide_signal_fatal(int sig) {
+    return sig == SIGKILL || sig == SIGABRT || sig == SIGTERM;
+}
 
 static void myjb_hide_abort_hook(void) {
     myjb_hide_snapshot("abort");
@@ -1317,6 +1326,45 @@ static void myjb_hide_abort_hook(void) {
 static void myjb_hide_exit_hook(int status) {
     myjb_hide_snapshot("exit");
     if (orig_exit_fn != NULL) orig_exit_fn(status);
+    for (;;) { }
+}
+
+static int myjb_hide_kill_hook(int pid, int sig) {
+    static uint32_t logs = 0;
+    if (logs < 16) {
+        logs++;
+        myjb_hide_log("myjb_hide: kill pid=%d sig=%d", pid, sig);
+    }
+    if (myjb_hide_signal_fatal(sig)) myjb_hide_snapshot("kill");
+    if (orig_kill_fn != NULL) return orig_kill_fn(pid, sig);
+    return -1;
+}
+
+static int myjb_hide_raise_hook(int sig) {
+    static uint32_t logs = 0;
+    if (logs < 16) {
+        logs++;
+        myjb_hide_log("myjb_hide: raise sig=%d", sig);
+    }
+    if (myjb_hide_signal_fatal(sig)) myjb_hide_snapshot("raise");
+    if (orig_raise_fn != NULL) return orig_raise_fn(sig);
+    return -1;
+}
+
+static int myjb_hide_pthread_kill_hook(void *thread, int sig) {
+    static uint32_t logs = 0;
+    if (logs < 16) {
+        logs++;
+        myjb_hide_log("myjb_hide: pthread_kill thread=%p sig=%d", thread, sig);
+    }
+    if (myjb_hide_signal_fatal(sig)) myjb_hide_snapshot("pthread_kill");
+    if (orig_pthread_kill_fn != NULL) return orig_pthread_kill_fn(thread, sig);
+    return -1;
+}
+
+static void myjb_hide_underscore_exit_hook(int status) {
+    myjb_hide_snapshot("_exit");
+    if (orig_underscore_exit_fn != NULL) orig_underscore_exit_fn(status);
     for (;;) { }
 }
 
@@ -1434,6 +1482,10 @@ static void myjb_hide_install_guard_hooks(void) {
     orig_task_info = myjb_hide_install_hook("task_info", (void *)myjb_hide_task_info_hook);
     orig_abort_fn = myjb_hide_install_hook("abort", (void *)myjb_hide_abort_hook);
     orig_exit_fn = myjb_hide_install_hook("exit", (void *)myjb_hide_exit_hook);
+    orig_kill_fn = myjb_hide_install_hook("kill", (void *)myjb_hide_kill_hook);
+    orig_raise_fn = myjb_hide_install_hook("raise", (void *)myjb_hide_raise_hook);
+    orig_pthread_kill_fn = myjb_hide_install_hook("pthread_kill", (void *)myjb_hide_pthread_kill_hook);
+    orig_underscore_exit_fn = myjb_hide_install_hook("_exit", (void *)myjb_hide_underscore_exit_hook);
 }
 
 static IMP g_orig_canOpenURL = NULL;
