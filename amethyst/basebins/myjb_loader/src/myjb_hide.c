@@ -426,8 +426,9 @@ static void *myjb_hide_install_hook(const char *name, void *replacement) {
     }
 
     void *original = NULL;
-    if (hook_function(target, replacement, &original) != 0) {
-        myjb_hide_log("myjb_hide: hook %s: patch failed", name);
+    int status = hook_function(target, replacement, &original);
+    if (status != 0) {
+        myjb_hide_log("myjb_hide: hook %s: patch failed (%d)", name, status);
         return NULL;
     }
 

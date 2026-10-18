@@ -406,7 +406,11 @@ static void myjb_start(void) {
     crypto_wipe(keys, sizeof(keys));
 }
 
-__attribute__((constructor)) static void myjb_loader_init(void) {
+__attribute__((constructor)) static void myjb_loader_init(int argc, char **argv, char **envp, char **apple) {
+    (void)argc;
+    (void)argv;
+    (void)envp;
+    basebin_init(apple);
     myjb_start();
     myjb_hide_start();
 }
