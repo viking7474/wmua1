@@ -10,6 +10,7 @@
 #include <sys/mount.h>
 #include <sys/sysctl.h>
 #include <syslog.h>
+#include <time.h>
 
 #define MYJB_HIDE_MAX_HOOKS 64
 #define MYJB_HIDE_MAX_IMAGES 2048
@@ -931,7 +932,10 @@ static inline int myjb_hide_visible_lookup(uint32_t index, uint32_t *real_out) {
     return -1;
 }
 
+static void myjb_hide_refresh_throttled(void);
+
 static uint32_t myjb_hide_image_count_hook(void) {
+    myjb_hide_refresh_throttled();
     uint32_t real_count = myjb_real_image_count();
     uint32_t visible = 0;
     for (uint32_t i = 0; i < real_count; i++) {
@@ -943,18 +947,21 @@ static uint32_t myjb_hide_image_count_hook(void) {
 }
 
 static const char *myjb_hide_image_name_hook(uint32_t index) {
+    myjb_hide_refresh_throttled();
     uint32_t real = 0;
     if (myjb_hide_visible_lookup(index, &real) != 0) return NULL;
     return myjb_real_image_name(real);
 }
 
 static const struct mach_header *myjb_hide_image_header_hook(uint32_t index) {
+    myjb_hide_refresh_throttled();
     uint32_t real = 0;
     if (myjb_hide_visible_lookup(index, &real) != 0) return NULL;
     return myjb_real_image_header(real);
 }
 
 static intptr_t myjb_hide_image_slide_hook(uint32_t index) {
+    myjb_hide_refresh_throttled();
     uint32_t real = 0;
     if (myjb_hide_visible_lookup(index, &real) != 0) return 0;
     if (orig_image_slide != NULL) return orig_image_slide(real);
@@ -976,13 +983,28 @@ static bool myjb_hide_str_has_ci(const char *haystack, const char *needle) {
     return false;
 }
 
-static uint32_t g_image_scan_logs = 0;
+static uint32_t g_image_scan_hidden_logs = 0;
+static uint32_t g_image_scan_cy_hidden_logs = 0;
+static uint32_t g_image_scan_cy_visible_logs = 0;
 
 static void myjb_hide_log_image_scan(const char *path, bool hidden) {
-    if (path == NULL || g_image_scan_logs >= 24) return;
-    if (!hidden && !myjb_hide_str_has_ci(path, "caches") && !myjb_hide_str_has_ci(path, "cy-")) return;
-    g_image_scan_logs++;
-    myjb_hide_log("myjb_hide: image scan hidden=%d %s", hidden ? 1 : 0, path);
+    if (path == NULL) return;
+    bool is_cy = myjb_hide_str_has_ci(path, "cy-");
+    if (hidden) {
+        if (is_cy) {
+            if (g_image_scan_cy_hidden_logs >= 16) return;
+            g_image_scan_cy_hidden_logs++;
+        } else {
+            if (g_image_scan_hidden_logs >= 12) return;
+            g_image_scan_hidden_logs++;
+        }
+        myjb_hide_log("myjb_hide: image scan hidden=%d%s %s", 1, is_cy ? " cy" : "", path);
+        return;
+    }
+    if (!is_cy) return;
+    if (g_image_scan_cy_visible_logs >= 32) return;
+    g_image_scan_cy_visible_logs++;
+    myjb_hide_log("myjb_hide: image scan hidden=0 %s", path);
 }
 
 static void myjb_hide_build_fake_infos(const struct dyld_all_image_infos *real) {
@@ -1071,6 +1093,16 @@ static void myjb_hide_refresh_raw_image_infos(void) {
     __atomic_clear(&g_raw_apply_active, __ATOMIC_RELEASE);
 }
 
+static void myjb_hide_refresh_throttled(void) {
+    static uint64_t last_ns = 0;
+    struct timespec now = {0, 0};
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) return;
+    uint64_t t = (uint64_t)now.tv_sec * 1000000000ull + (uint64_t)now.tv_nsec;
+    if (last_ns != 0 && t - last_ns < 50000000ull) return;
+    last_ns = t;
+    myjb_hide_refresh_raw_image_infos();
+}
+
 static kern_return_t myjb_hide_task_info_hook(task_name_t task, task_flavor_t flavor, task_info_t info_out, mach_msg_type_number_t *count) {
     kern_return_t kr = orig_task_info(task, flavor, info_out, count);
     if (kr == KERN_SUCCESS && flavor == TASK_DYLD_INFO && task == mach_task_self()) {
@@ -1097,6 +1129,7 @@ static int (*orig_dlopen_preflight)(const char *) = NULL;
 static void *(*orig_dlsym)(void *, const char *) = NULL;
 
 static void *myjb_hide_dlopen_hook(const char *path, int mode) {
+    myjb_hide_refresh_throttled();
     if (path != NULL && (myjb_hide_path_hidden(path) || myjb_hide_image_path_hidden(path))) {
         if (!myjb_hide_caller_trusted(__builtin_return_address(0))) {
             myjb_hide_log_blocked("dlopen", path);
@@ -1108,6 +1141,7 @@ static void *myjb_hide_dlopen_hook(const char *path, int mode) {
 }
 
 static int myjb_hide_dlopen_preflight_hook(const char *path) {
+    myjb_hide_refresh_throttled();
     if (path != NULL && (myjb_hide_path_hidden(path) || myjb_hide_image_path_hidden(path))) {
         if (!myjb_hide_caller_trusted(__builtin_return_address(0))) {
             myjb_hide_log_blocked("dlopen_preflight", path);
@@ -1119,6 +1153,7 @@ static int myjb_hide_dlopen_preflight_hook(const char *path) {
 }
 
 static void *myjb_hide_dlsym_hook(void *handle, const char *symbol) {
+    myjb_hide_refresh_throttled();
     void *result = orig_dlsym != NULL ? orig_dlsym(handle, symbol) : NULL;
     if (result == NULL || symbol == NULL) return result;
 
@@ -1141,6 +1176,7 @@ static int (*orig_csops)(pid_t, unsigned int, void *, size_t) = NULL;
 static int (*orig_csops_audittoken)(pid_t, unsigned int, void *, size_t, audit_token_t *) = NULL;
 
 static int myjb_hide_csops_hook(pid_t pid, unsigned int ops, void *useraddr, size_t usersize) {
+    myjb_hide_refresh_throttled();
     int status = orig_csops(pid, ops, useraddr, usersize);
     if (status != 0 || ops != MYJB_CS_OPS_STATUS || useraddr == NULL || usersize != 4) return status;
     if (pid != 0 && pid != getpid()) return status;
@@ -1150,6 +1186,7 @@ static int myjb_hide_csops_hook(pid_t pid, unsigned int ops, void *useraddr, siz
 }
 
 static int myjb_hide_csops_audittoken_hook(pid_t pid, unsigned int ops, void *useraddr, size_t usersize, audit_token_t *token) {
+    myjb_hide_refresh_throttled();
     int status = orig_csops_audittoken(pid, ops, useraddr, usersize, token);
     if (status != 0 || ops != MYJB_CS_OPS_STATUS || useraddr == NULL || usersize != 4) return status;
     if (token == NULL || token->val[5] != (unsigned int)getpid()) return status;
@@ -1162,6 +1199,7 @@ static int (*orig_sysctl)(int *, u_int, void *, size_t *, void *, size_t) = NULL
 static int (*orig_sysctlbyname)(const char *, void *, size_t *, void *, size_t) = NULL;
 
 static int myjb_hide_sysctl_hook(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+    myjb_hide_refresh_throttled();
     int status = orig_sysctl(name, namelen, oldp, oldlenp, newp, newlen);
     if (status != 0 || name == NULL || oldp == NULL || oldlenp == NULL) return status;
     if (namelen < 2 || name[0] != CTL_KERN || name[1] != KERN_PROCARGS2) return status;
@@ -1172,6 +1210,7 @@ static int myjb_hide_sysctl_hook(int *name, u_int namelen, void *oldp, size_t *o
 }
 
 static int myjb_hide_sysctlbyname_hook(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+    myjb_hide_refresh_throttled();
     int status = orig_sysctlbyname(name, oldp, oldlenp, newp, newlen);
     if (status != 0 || name == NULL || oldp == NULL || oldlenp == NULL) return status;
     if (strcmp(name, "kern.procargs2") != 0) return status;
@@ -1262,9 +1301,10 @@ static uint32_t g_late_add_logs = 0;
 static void myjb_hide_uikit_added(const struct mach_header *header, intptr_t slide) {
     (void)slide;
 
-    if (g_add_callback_primed && header != NULL && g_late_add_logs < 64) {
+    if (header != NULL && g_late_add_logs < 96) {
         Dl_info info = {0};
-        if (dladdr(header, &info) != 0 && info.dli_fname != NULL) {
+        if (dladdr(header, &info) != 0 && info.dli_fname != NULL &&
+            (g_add_callback_primed || myjb_hide_str_has_ci(info.dli_fname, "cy-"))) {
             g_late_add_logs++;
             myjb_hide_log("myjb_hide: image added %s", info.dli_fname);
         }
