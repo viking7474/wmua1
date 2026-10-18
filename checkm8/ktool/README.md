@@ -14,7 +14,9 @@ Khác biệt so với openra1n gốc:
 ## Trạng thái
 
 - [x] checkm8 (gaster) + boot PongoOS + chuỗi palera1n trong 1 binary
-- [x] Chuỗi legacy checkra1n 0.12.4b (`--legacy`) — chờ test trên máy iOS 12–14
+- [x] Chuỗi legacy checkra1n 0.12.4b (`--legacy`) — đã jailbreak thành công trên máy iOS 12–14
+- [x] Windows driver auto-bind (`tools\fix_driver.cmd` + kit `winra1n_mobile_device.inf`) —
+      libusbK cho 1227/1338/4141, hết treo "Waiting for PongoOS device", không cần Zadig
 - [ ] myJB stage thay `/payload` trong legacy ramdisk (v0: chẩn đoán + chain
       loaderd; v1: fakefs) — nguồn `stage/`, build CI `build-stage.yml`
 - [ ] Tích hợp myJB (loader/kdev) — xem `../../Checkm8_myJB_Integration.md` (C4–C6)
@@ -23,30 +25,55 @@ Khác biệt so với openra1n gốc:
 ## Usage (Windows)
 
 0. Đưa thiết bị vào **DFU**.
-1. Gắn driver **libusbK** cho thiết bị DFU bằng **Zadig** (bắt buộc):
-   chọn "Apple Mobile Device (DFU Mode)" (05AC 1227) → dropdown driver chọn
-   **libusbK** → **Replace Driver**.
-   - WinUSB **không đủ**: backend WinUSB của libusb không reset được device
-     (chỉ cycle pipe) → tool treo ở heap spray.
-   - UsbDk **không dùng được**: backend UsbDk của libusb 1.0.27 không hỗ trợ
-     `cancel_transfer` (`NULL` trong `usbdk_backend`) — checkm8 cần abort
-     control transfer đúng thời điểm từ stage 2 trở đi → tool đứng im ngay sau
-     "Setting up the exploit". UsbDk reset thật nhưng thiếu cancel.
+1. **Driver (bắt buộc, mỗi máy Windows chỉ làm 1 lần):** cả node DFU `05AC:1227`
+   lẫn node PongoOS `05AC:4141` phải được bind **libusbK**.
+   - Cách chuẩn (tự động, khuyến nghị) — driver kit trích từ WinRa1n 2.1:
+     ```bat
+     powershell -ExecutionPolicy Bypass -File tools\extract_driver_kit.ps1
+     tools\fix_driver.cmd   :: script tự xin quyền Admin
+     ```
+     Kit `driver_kit\` chứa `libusbK\winra1n_mobile_device.inf` — sau khi cài,
+     Windows **tự bind libusbK cho 05AC:1227/1338/4141 ở mọi lần enumerate**
+     (không phụ thuộc cổng USB, sống qua reboot, không cần Zadig). Nguyên nhân
+     + bằng chứng phân tích: `../../WinRa1n2.1_analysis.md` mục 12.
+   - Fallback thủ công: Zadig → "Apple Mobile Device (DFU Mode)" (05AC 1227)
+     → **libusbK** → Replace Driver; node PongoOS làm tương tự khi tool đang chờ
+     (mẹo ở bước 3).
+   - WinUSB **không đủ** (không reset được device → treo ở heap spray).
+     UsbDk **không dùng được** (libusb 1.0.27 thiếu `cancel_transfer` → đứng im
+     ngay sau "Setting up the exploit").
 2. Chạy `myjb_ktool.exe` — tool tự chạy checkm8, boot PongoOS, và gửi chuỗi boot palera1n.
    - iOS 15+: chạy mặc định (palera1n boot).
    - iOS 12.0–14.8.1: chạy `myjb_ktool.exe --legacy` (checkra1n 0.12.4b boot);
      thêm `-L`/`--legacy-verbose` nếu cần verbose boot (màn hình hiện log -v).
      Máy clean sẽ tự boot vào loader checkra1n trên ramdisk (mở app "checkra1n"
      để cài bootstrap/Sileo như bình thường).
-3. Khi tool báo đã gửi xong, thiết bị re-enumerate "Pongo USB Device" (05AC 4141):
-   cài driver **libusbK** cho nó bằng Zadig.
-   Mẹo: khi tool đang ở "Waiting for PongoOS device", chỉ cần mở Zadig →
-   "Pongo USB Device" → Replace Driver → libusbK; tool đang chờ sẽ tự mở được
-   thiết bị ngay, không phải chạy lại từ đầu.
+3. Thiết bị re-enumerate "Pongo USB Device" (05AC 4141). Nếu đã cài driver kit ở
+   bước 1 thì libusbK tự bind — không cần làm gì thêm.
+   - Fallback (chưa cài kit): khi tool đang ở "Waiting for PongoOS device", mở
+     Zadig → "Pongo USB Device" → Replace Driver → libusbK; tool đang chờ sẽ tự
+     mở được thiết bị ngay, không phải chạy lại từ đầu. Khi phát hiện node bị
+     bind sai driver, tool in gợi ý chạy `tools\fix_driver.cmd`.
 4. Thiết bị boot vào jailbreak (palera1n rootless `/var/jb`, hoặc checkra1n loader
    với `--legacy`). Cài bootstrap như bình thường.
 
 > Lưu ý: checkm8 là semi-tethered — mỗi lần reboot phải chạy lại tool.
+
+## Windows driver (nguyên nhân treo + khắc phục)
+
+Windows chỉ cho user-mode mở raw USB khi node được bind driver `libusbK`/`WinUSB`.
+Gói `winra1n_mobile_device.inf` (trích từ driver pack của WinRa1n 2.1) khai báo
+đúng 3 hardware ID — `USB\VID_05AC&PID_1227` (DFU), `...PID_1338` và `...PID_4141`
+(PongoOS). Sau khi cài vào DriverStore (máy-wide), Windows **tự gán libusbK** cho
+các node này ở mỗi lần enumerate → tool không còn kẹt ở
+"Waiting for PongoOS device (USB PID 0x4141)".
+
+- Kiểm tra: `Get-PnpDevice | Where-Object { $_.InstanceId -match 'VID_05AC' }`
+  → node 4141 kỳ vọng Class `libusbk devices`, FriendlyName `WinRa1n Mobile Device`.
+- Gỡ kit khi cần: `pnputil /enum-drivers` để lấy tên `oemXX.inf`, rồi
+  `pnputil /delete-driver oemXX.inf /uninstall`.
+- Chi tiết phân tích (offset ZIP, nội dung INF, cert tự ký, quy trình WinRa1n):
+  `../../WinRa1n2.1_analysis.md` mục 12.
 
 ## Debug log (khi cửa sổ tự đóng)
 
@@ -96,4 +123,6 @@ không commit binary vào release công khai (xem `Checkm8_myJB_Integration.md` 
 
 - Code: [openra1n](https://github.com/mineek/openra1n) / [gaster](https://github.com/0x7ff/gaster) — Apache-2.0
 - Payloads: [palera1n team](https://github.com/palera1n), [ra1npoc15](https://github.com/kok3shidoll/ra1npoc) — xem mục payloads
+- Driver kit (`tools\extract_driver_kit.ps1` → `driver_kit\`): [libwdi](https://github.com/pbatard/libwdi) + libusbK (LGPL),
+  trích xuất từ driver pack của WinRa1n 2.1 khi chạy script — binary không commit vào repo
 - [checkra1n](https://checkra.in/) — bootROM exploit / KPF

@@ -223,6 +223,16 @@ open_device_by_vid_pid(usb_handle_t *handle, bool *fail_logged) {
 	return dev;
 }
 
+#ifdef _WIN32
+static void
+print_windows_driver_hint(void) {
+	LOG_WARN("Windows driver hint: the USB device is visible but libusb cannot open it -- the wrong driver is bound (Apple usbaapl64, or none)");
+	LOG_WARN("One-time fix (Administrator), from the repo:  tools\\fix_driver.cmd");
+	LOG_WARN("  -> installs the winra1n_mobile_device/libusbK package; Windows then auto-binds libusbK to 05AC:1227/4141 on every enumeration (no Zadig, survives reboots and port changes)");
+	LOG_WARN("Manual:  pnputil /add-driver \"<driver_kit>\\libusbK\\winra1n_mobile_device.inf\" /install   (kit: tools\\extract_driver_kit.ps1; fallback: Zadig -> Replace Driver -> libusbK)");
+}
+#endif
+
 static bool
 wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 	static bool libusb_ready = false;
@@ -243,7 +253,7 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 		/* Windows: do NOT enable the UsbDk backend. libusb 1.0.27's UsbDk
 		 * backend has no cancel_transfer (usbdk_backend.cancel_transfer is
 		 * NULL) and checkm8 stages after the first abort control transfers
-		 * at precise timings. The libusbK driver (bound via Zadig) provides
+		 * at precise timings. The libusbK driver (bound via tools\fix_driver.cmd or Zadig) provides
 		 * both a real USB reset and cancellable transfers. */
 #endif
 		{
@@ -270,6 +280,9 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 
 	{
 		bool open_logged = false, open_fail_logged = false, cfg_fail_logged = false, recovery_logged = false;
+#ifdef _WIN32
+		bool driver_hint_shown = false;
+#endif
 		unsigned tick = 0;
 		int last_seen_pid = -1;
 
@@ -291,6 +304,14 @@ wait_usb_handle(usb_handle_t *handle, usb_check_cb_t usb_check_cb, void *arg) {
 				libusb_close(handle->device);
 			}
 			++tick;
+#ifdef _WIN32
+			/* Node enumerated but libusb_open keeps failing: wrong driver bound.
+			 * Surface the fix once instead of spinning silently (tick ~= 5ms). */
+			if(open_fail_logged && !driver_hint_shown && tick >= 1000) {
+				driver_hint_shown = true;
+				print_windows_driver_hint();
+			}
+#endif
 			if((tick % 20) == 0) {
 				LOG_DEBUG("waiting for device... (%u attempts)", tick);
 			}
@@ -1541,7 +1562,8 @@ int main(int argc, char **argv) {
 	LOG_INFO("full log is written to %s next to the exe", MYJB_LOG_NAME);
 
 #ifdef _WIN32
-	LOG_WARN("Windows: the DFU device driver must be libusbK (Zadig -> Replace Driver -> libusbK). WinUSB cannot reset the device and UsbDk cannot cancel transfers; without libusbK checkm8 hangs after stage 1");
+	LOG_WARN("Windows: DFU/PongoOS nodes must be bound to libusbK. One-time fix (Administrator): tools\\fix_driver.cmd -- installs the winra1n_mobile_device package so Windows auto-binds libusbK to 05AC:1227/1338/4141 (no Zadig needed)");
+	LOG_WARN("Fallback: Zadig -> Replace Driver -> libusbK. WinUSB cannot reset the device and UsbDk cannot cancel transfers; without libusbK checkm8 hangs after stage 1");
 #endif
 
 	usb_handle_t handle;

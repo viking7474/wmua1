@@ -326,3 +326,78 @@ Do IL bị obfuscate nặng, các chi tiết sau nên xác nhận bằng phân t
 3. Nội dung encrypted resources (6 blob hex-named) — chứa string key/URL/license logic.
 4. Tên tiến trình con chạy qua `CreateProcess`.
 5. Endpoint license server thật (bị mã hóa trong resource).
+
+---
+
+## 12. Xác nhận trực tiếp — carve 2 ZIP nhúng (18/10)
+
+Đã carve trực tiếp 2 ZIP nhúng trong `WinRa1n2.1.exe` và đọc nguyên văn nội dung — các suy luận ở mục 5.1/5.4 nay là dữ kiện xác thực.
+
+### 12.1. ZIP #1 — driver pack libwdi
+- Offset `19729372` (0x12D0A9C), độ dài `12672781` (EOCD@32402131), **32 entry**.
+- Nội dung: `libusbK/amd64|.x86/{libusbK.sys, libusbK.dll, libusbK_x86.dll, libusb0.sys, libusb0.dll, libusb0_x86.dll, WdfCoInstaller01011.dll, winusbcoinstaller2.dll}`; `libusbK/winra1n_mobile_device.inf` + `.cat`; `apple/x64|.x86/{usbaapl64.inf, usbaapl64.sys, USBAAPL64.CAT, usbaaplrc.dll}`.
+- Giải nén thực tế: 26 file, 18.361.501 bytes.
+
+### 12.2. ZIP #2 — Apple Mobile Device Support
+- Offset `32531631` (0x1F064AF), độ dài `29693887` (EOCD@62225496), **18 entry**: `MobileDevice.dll` (3,61 MB), `CoreFoundation.dll`, `CFNetwork.dll`, `AirTrafficHost.dll`, `icudt62.dll` (27,2 MB), `libcache.dll` (13,1 MB), `libicuin/ucu`, `objc.dll`, `SQLite3.dll`, `libdispatch.dll`, `libxml2.dll`, `lz4.dll`, `pthreadVC2.dll`, `zlib1.dll`, `ASL.dll`, `vcruntime140d.dll`, `ucrtbased.dll`.
+
+### 12.3. INF — điểm mấu chốt (nguyên văn rút gọn)
+
+```inf
+[Strings]
+DeviceName = "WinRa1n Mobile Device"
+VendorName = "Apple, Inc."
+DeviceID   = "VID_05AC&PID_1227"
+
+[Version]
+Class       = "winra1n devices"
+Provider    = "libusbK"
+CatalogFile = winra1n_mobile_device.cat
+DriverVer   = 03/03/2023, 1.0.0.0
+
+[Manufacturer]
+%VendorName% = LUsbK_DeviceGroup,NTX86,NTAMD64
+
+[LUsbK_DeviceGroup.NTAMD64]
+%DeviceName%=LUsbK_Device, USB\%DeviceID%, USB\VID_05AC&PID_1338, USB\VID_05AC&PID_4141
+```
+
+→ Gói này bind **libusbK** cho đúng 3 hardware ID: `USB\VID_05AC&PID_1227` (DFU), `USB\VID_05AC&PID_1338`, `USB\VID_05AC&PID_4141` (**PongoOS**).
+
+### 12.4. Vì sao WinRa1n không bao giờ kẹt ở bước chờ PongoOS
+
+- WinRa1n "Fix Driver" = thêm cert tự ký của `.cat` vào trust store + add-driver gói INF trên vào DriverStore (máy-wide) + ép cài lên devnode Apple hiện có (API ở mục 4.4: `DiInstallDriver`/`DriverStoreImportW`/`SetupDiSetDeviceInstallParams`).
+- Sau khi cài, Windows **tự bind libusbK** cho mọi node `05AC:4141` khi pongoOS enumerate — match theo hardware ID trong INF, **không theo cổng USB**, sống qua restart.
+- `myjb_ktool` chỉ Zadig thủ công (per-instance) cho 1227 — không có gói nào match 4141 → libusb không mở được node → treo `Waiting for PongoOS device (USB PID 0x4141)`. Đây là nguyên nhân gốc của lỗi "WinRa1n chạy được, myjb treo".
+- Chi tiết chữ ký: cat tự ký `CN=libusbK (winra1n_mobile_device.inf)`, thumbprint `F30612598EF2DF08196272F101AB786519C1A267`, hạn 31/12/2028; các `.sys` có chữ ký Authenticode hợp lệ (CN=Travis Lee Robinson; WdfCoInstaller: Microsoft).
+
+### 12.5. Kit khắc phục (đã đóng gói)
+
+- Thư mục kit: `C:\Users\ADMIN\Downloads\winra1n_driver_kit` (+ `winra1n_driver_kit.zip` để chuyển máy) gồm: `libusbK\`, `apple\`, `trust\winra1n_mobile_device.cer`, `README-VI.txt`.
+- Trên máy flash (Admin):
+  - Cách A: WinRa1n → Fix Driver → thoát (đừng để chạy jailbreak); hoặc
+  - Cách B: `Import-Certificate` cert vào `LocalMachine\Root` + `TrustedPublisher`, rồi `pnputil /add-driver <kit>\libusbK\winra1n_mobile_device.inf /install`.
+- Kiểm tra: `Get-PnpDevice` → mong đợi Class `winra1n devices`, FriendlyName `WinRa1n Mobile Device` cho 1227/1338/4141.
+- Hướng phát triển tiếp (tùy chọn): nhúng driver pack + logic add-driver (setupapi/newdev) vào `myjb_ktool` để tự xử lý như WinRa1n.
+
+### 12.6. Đã xác nhận khắc phục (18/10)
+
+- Trên máy flash đã chạy thành công: `Import-Certificate` (Root + TrustedPublisher) rồi
+  `pnputil /add-driver .\libusbK\winra1n_mobile_device.inf /install`
+  → `Published Name: oem56.inf`, package tự bind 5 instance cũ:
+  `PID_4141` ×2 (SRTG `[PongoOS-2.6.2-473225d6]`, `[PongoOS-2.6.2-35c54683]`) và
+  `PID_1227` ×3 (`YOLO:checkra1n`, `PWND:[IKEYM8]`, iBoot plain).
+- `Get-PnpDevice`: node 4141 hiển thị Class `libusbk devices`, FriendlyName
+  `WinRa1n Mobile Device`; node 1227 Class `libusbk devices`, FriendlyName
+  `Apple Mobile Device (DFU Mode)`. Các dòng `Status = Unknown` là instance
+  phantom (thiết bị không cắm) — bình thường.
+- **`myjb_ktool.exe --legacy` chạy trọn vẹn: jailbreak lại thành công.**
+- Đã đưa khắc phục vào mã nguồn/tài liệu repo:
+  - `checkm8/ktool/openra1n.c`: khi node enumerate được nhưng `libusb_open` fail
+    (driver sai) tool in hint fix một lần thay vì treo im lặng; cảnh báo đầu chương trình
+    trỏ về `tools\fix_driver.cmd`.
+  - `checkm8/ktool/README.md`: mục Usage + "Windows driver (nguyên nhân treo + khắc phục)".
+  - `tools/extract_driver_kit.ps1`: tái tạo `driver_kit\` từ `WinRa1n2.1.exe`
+    (carve ZIP + export cert — không commit binary vào repo).
+  - `tools/fix_driver.cmd`: cài kit (tự elevation): `certutil` Root + TrustedPublisher,
+    `pnputil /add-driver ... /install`.
