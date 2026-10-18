@@ -993,6 +993,9 @@ static const struct dyld_all_image_infos *myjb_hide_get_all_image_infos_hook(voi
     return &g_fake_image_infos;
 }
 
+static kern_return_t (*orig_task_info)(task_name_t, task_flavor_t, task_info_t, mach_msg_type_number_t *) = NULL;
+static bool g_raw_apply_active = false;
+
 static void myjb_hide_apply_raw_image_infos(void) {
     static bool logged = false;
     static uint32_t refilter_logs = 0;
@@ -1000,7 +1003,10 @@ static void myjb_hide_apply_raw_image_infos(void) {
 
     task_dyld_info_data_t info = {0};
     uint32_t count = TASK_DYLD_INFO_COUNT;
-    if (task_info(mach_task_self(), TASK_DYLD_INFO, (task_info_t)&info, &count) != KERN_SUCCESS ||
+    kern_return_t kr = orig_task_info != NULL
+        ? orig_task_info(mach_task_self(), TASK_DYLD_INFO, (task_info_t)&info, (mach_msg_type_number_t *)&count)
+        : task_info(mach_task_self(), TASK_DYLD_INFO, (task_info_t)&info, (mach_msg_type_number_t *)&count);
+    if (kr != KERN_SUCCESS ||
         info.all_image_info_addr == 0) {
         if (!logged) {
             myjb_hide_log("myjb_hide: raw image infos: task_info failed");
@@ -1028,12 +1034,26 @@ static void myjb_hide_apply_raw_image_infos(void) {
         last_real_count = real_count;
         return;
     }
-    if (real_count != last_real_count && refilter_logs < 3) {
+    if (real_count != last_real_count && refilter_logs < 8) {
         myjb_hide_log("myjb_hide: raw image infos refiltered %u/%u",
                       g_fake_image_infos.infoArrayCount, real_count);
         refilter_logs++;
     }
     last_real_count = real_count;
+}
+
+static void myjb_hide_refresh_raw_image_infos(void) {
+    if (__atomic_test_and_set((void *)&g_raw_apply_active, __ATOMIC_ACQ_REL)) return;
+    myjb_hide_apply_raw_image_infos();
+    __atomic_clear(&g_raw_apply_active, __ATOMIC_RELEASE);
+}
+
+static kern_return_t myjb_hide_task_info_hook(task_name_t task, task_flavor_t flavor, task_info_t info_out, mach_msg_type_number_t *count) {
+    kern_return_t kr = orig_task_info(task, flavor, info_out, count);
+    if (kr == KERN_SUCCESS && flavor == TASK_DYLD_INFO && task == mach_task_self()) {
+        myjb_hide_refresh_raw_image_infos();
+    }
+    return kr;
 }
 
 static bool myjb_hide_caller_trusted(void *return_address) {
@@ -1140,6 +1160,7 @@ static void myjb_hide_install_guard_hooks(void) {
     orig_dlopen = myjb_hide_install_hook("dlopen", (void *)myjb_hide_dlopen_hook);
     orig_dlopen_preflight = myjb_hide_install_hook("dlopen_preflight", (void *)myjb_hide_dlopen_preflight_hook);
     orig_dlsym = myjb_hide_install_hook("dlsym", (void *)myjb_hide_dlsym_hook);
+    orig_task_info = myjb_hide_install_hook("task_info", (void *)myjb_hide_task_info_hook);
 }
 
 static IMP g_orig_canOpenURL = NULL;
@@ -1207,11 +1228,21 @@ static void myjb_hide_swizzle(Class cls, const char *selector, IMP replacement, 
     *original = ((IMP (*)(Method, IMP))g_method_setImplementation)(method, replacement);
 }
 
+static bool g_add_callback_primed = false;
+static uint32_t g_late_add_logs = 0;
+
 static void myjb_hide_uikit_added(const struct mach_header *header, intptr_t slide) {
-    (void)header;
     (void)slide;
 
-    myjb_hide_apply_raw_image_infos();
+    if (g_add_callback_primed && header != NULL && g_late_add_logs < 64) {
+        Dl_info info = {0};
+        if (dladdr(header, &info) != 0 && info.dli_fname != NULL) {
+            g_late_add_logs++;
+            myjb_hide_log("myjb_hide: image added %s", info.dli_fname);
+        }
+    }
+
+    myjb_hide_refresh_raw_image_infos();
 
     myjb_hide_load_objc();
     if (g_objc_getClass == NULL) return;
@@ -1289,10 +1320,11 @@ void myjb_hide_start(void) {
 
     myjb_hide_install_file_hooks();
     myjb_hide_install_image_hooks();
-    myjb_hide_apply_raw_image_infos();
+    myjb_hide_refresh_raw_image_infos();
     myjb_hide_install_guard_hooks();
 
     myjb_hide_log("myjb_hide: %u hook(s) installed", g_hook_table_count);
 
     _dyld_register_func_for_add_image(myjb_hide_uikit_added);
+    g_add_callback_primed = true;
 }
