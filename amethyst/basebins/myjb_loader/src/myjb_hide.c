@@ -7,8 +7,6 @@
 #include <stdint.h>
 #include <sys/attr.h>
 
-extern int getattrlistbulk(int dirfd, struct attrlist *alist, void *attributeBuffer, size_t bufferSize, uint64_t options);
-
 #define MYJB_HIDE_MAX_HOOKS 48
 #define MYJB_HIDE_MAX_BULK_ENTRIES 160
 #define MYJB_HIDE_MAX_KEEP_EXTRA 8
