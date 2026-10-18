@@ -993,6 +993,16 @@ static intptr_t myjb_hide_image_slide_hook(uint32_t index) {
     return _dyld_get_image_vmaddr_slide(real);
 }
 
+static const uint8_t *(*orig_image_uuid)(uint32_t) = NULL;
+
+static const uint8_t *myjb_hide_image_uuid_hook(uint32_t index) {
+    myjb_hide_refresh_throttled();
+    if (orig_image_uuid == NULL) return NULL;
+    uint32_t real = 0;
+    if (myjb_hide_visible_lookup(index, &real) != 0) return NULL;
+    return orig_image_uuid(real);
+}
+
 static const struct dyld_all_image_infos *(*orig_get_all_image_infos)(void) = NULL;
 
 static struct dyld_image_info g_fake_image_array[MYJB_HIDE_MAX_IMAGES];
@@ -1035,12 +1045,98 @@ static void myjb_hide_log_image_scan(const char *path, bool hidden) {
     myjb_hide_log("myjb_hide: image scan hidden=0 %s", path);
 }
 
+struct myjb_hide_entry_record {
+    const void *load;
+    const char *path_ptr;
+    char path_copy[96];
+};
+
+static struct myjb_hide_entry_record g_entry_records[MYJB_HIDE_MAX_IMAGES];
+static uint32_t g_entry_record_count = 0;
+static uint32_t g_entry_new_logs = 0;
+static uint32_t g_entry_change_logs = 0;
+
+static void myjb_hide_entry_path_copy(char *dst, size_t dst_size, const char *src) {
+    if (dst_size == 0) return;
+    if (src == NULL) {
+        dst[0] = '\0';
+        return;
+    }
+    size_t i = 0;
+    for (; i + 1 < dst_size && src[i] != '\0'; i++) dst[i] = src[i];
+    dst[i] = '\0';
+}
+
+static void myjb_hide_entry_uuid_str(const struct mach_header *header, char *out, size_t out_size) {
+    if (out_size == 0) return;
+    out[0] = '\0';
+    if (header == NULL || header->magic != MH_MAGIC_64) return;
+    const struct mach_header_64 *h64 = (const struct mach_header_64 *)header;
+    const uint8_t *cmd = (const uint8_t *)header + sizeof(struct mach_header_64);
+    for (uint32_t i = 0; i < h64->ncmds; i++) {
+        const struct load_command *lc = (const struct load_command *)cmd;
+        if (lc->cmdsize < sizeof(struct load_command)) return;
+        if (lc->cmd == LC_UUID && lc->cmdsize >= sizeof(struct uuid_command)) {
+            const struct uuid_command *uc = (const struct uuid_command *)lc;
+            static const char hex[] = "0123456789abcdef";
+            size_t at = 0;
+            for (size_t b = 0; b < 16 && at + 2 < out_size; b++) {
+                out[at++] = hex[(uc->uuid[b] >> 4) & 0xf];
+                out[at++] = hex[uc->uuid[b] & 0xf];
+            }
+            out[at] = '\0';
+            return;
+        }
+        cmd += lc->cmdsize;
+    }
+}
+
+static void myjb_hide_entry_track(const struct dyld_image_info *entry) {
+    const void *load = entry->imageLoadAddress;
+    for (uint32_t i = 0; i < g_entry_record_count; i++) {
+        struct myjb_hide_entry_record *rec = &g_entry_records[i];
+        if (rec->load != load) continue;
+        const char *path = entry->imageFilePath;
+        bool changed = path != rec->path_ptr;
+        if (!changed) {
+            if (path == NULL) {
+                changed = rec->path_copy[0] != '\0';
+            } else {
+                changed = strncmp(path, rec->path_copy, sizeof(rec->path_copy) - 1) != 0;
+            }
+        }
+        if (changed) {
+            if (g_entry_change_logs < 32) {
+                g_entry_change_logs++;
+                myjb_hide_log("myjb_hide: entry path change load=%p [%s] -> [%s]",
+                              load, rec->path_copy, path != NULL ? path : "NULL");
+            }
+            rec->path_ptr = path;
+            myjb_hide_entry_path_copy(rec->path_copy, sizeof(rec->path_copy), path);
+        }
+        return;
+    }
+    if (g_entry_record_count >= MYJB_HIDE_MAX_IMAGES) return;
+    struct myjb_hide_entry_record *rec = &g_entry_records[g_entry_record_count++];
+    rec->load = load;
+    rec->path_ptr = entry->imageFilePath;
+    myjb_hide_entry_path_copy(rec->path_copy, sizeof(rec->path_copy), entry->imageFilePath);
+    if (g_entry_new_logs < 1600) {
+        g_entry_new_logs++;
+        char uuid[40];
+        myjb_hide_entry_uuid_str((const struct mach_header *)load, uuid, sizeof(uuid));
+        myjb_hide_log("myjb_hide: entry new load=%p uuid=%s path=[%s]",
+                      load, uuid[0] != '\0' ? uuid : "none", rec->path_copy);
+    }
+}
+
 static void myjb_hide_build_fake_infos(const struct dyld_all_image_infos *real) {
     uint32_t visible = 0;
     if (real != NULL && real->infoArray != NULL && real->infoArrayCount <= MYJB_HIDE_MAX_IMAGES) {
         for (uint32_t i = 0; i < real->infoArrayCount && visible < MYJB_HIDE_MAX_IMAGES; i++) {
             const struct dyld_image_info *entry = &real->infoArray[i];
             if (entry->imageLoadAddress == NULL) continue;
+            myjb_hide_entry_track(entry);
             if (myjb_hide_header_uuid_hidden(entry->imageLoadAddress)) {
                 if (g_image_scan_uuid_logs < 8) {
                     g_image_scan_uuid_logs++;
@@ -1411,6 +1507,7 @@ static void myjb_hide_install_image_hooks(void) {
     orig_image_name = myjb_hide_install_hook("_dyld_get_image_name", (void *)myjb_hide_image_name_hook);
     orig_image_header = myjb_hide_install_hook("_dyld_get_image_header", (void *)myjb_hide_image_header_hook);
     orig_image_slide = myjb_hide_install_hook("_dyld_get_image_vmaddr_slide", (void *)myjb_hide_image_slide_hook);
+    orig_image_uuid = myjb_hide_install_hook("_dyld_get_image_uuid", (void *)myjb_hide_image_uuid_hook);
     orig_get_all_image_infos = myjb_hide_install_hook("_dyld_get_all_image_infos", (void *)myjb_hide_get_all_image_infos_hook);
 }
 
