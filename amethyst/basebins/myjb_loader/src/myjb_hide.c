@@ -13,6 +13,8 @@
 #include <syslog.h>
 #include <time.h>
 #include <signal.h>
+#include <pthread.h>
+#include <execinfo.h>
 
 #define MYJB_HIDE_MAX_HOOKS 64
 #define MYJB_HIDE_MAX_IMAGES 2048
@@ -1317,52 +1319,85 @@ static bool myjb_hide_signal_fatal(int sig) {
     return sig == SIGKILL || sig == SIGABRT || sig == SIGTERM;
 }
 
+static void myjb_hide_log_backtrace(const char *why) {
+    void *frames[10] = {0};
+    int count = backtrace(frames, 10);
+    myjb_hide_log("myjb_hide: %s bt thread=%p frames=%d", why, (void *)pthread_self(), count);
+    for (int i = 0; i < count; i++) {
+        Dl_info info = {0};
+        if (dladdr(frames[i], &info) != 0 && info.dli_fname != NULL) {
+            myjb_hide_log("myjb_hide: %s bt[%d] %p [%s] +0x%llx", why, i, frames[i], info.dli_fname,
+                          (unsigned long long)((uintptr_t)frames[i] - (uintptr_t)info.dli_fbase));
+        } else {
+            myjb_hide_log("myjb_hide: %s bt[%d] %p [unknown]", why, i, frames[i]);
+        }
+    }
+}
+
 static void myjb_hide_abort_hook(void) {
+    myjb_hide_log_backtrace("abort");
     myjb_hide_snapshot("abort");
     if (orig_abort_fn != NULL) orig_abort_fn();
     for (;;) { }
 }
 
 static void myjb_hide_exit_hook(int status) {
+    myjb_hide_log_backtrace("exit");
     myjb_hide_snapshot("exit");
     if (orig_exit_fn != NULL) orig_exit_fn(status);
     for (;;) { }
 }
 
 static int myjb_hide_kill_hook(int pid, int sig) {
-    static uint32_t logs = 0;
-    if (logs < 16) {
-        logs++;
+    if (myjb_hide_signal_fatal(sig)) {
         myjb_hide_log("myjb_hide: kill pid=%d sig=%d", pid, sig);
+        myjb_hide_log_backtrace("kill");
+        myjb_hide_snapshot("kill");
+    } else {
+        static uint32_t logs = 0;
+        if (logs < 16) {
+            logs++;
+            myjb_hide_log("myjb_hide: kill pid=%d sig=%d", pid, sig);
+        }
     }
-    if (myjb_hide_signal_fatal(sig)) myjb_hide_snapshot("kill");
     if (orig_kill_fn != NULL) return orig_kill_fn(pid, sig);
     return -1;
 }
 
 static int myjb_hide_raise_hook(int sig) {
-    static uint32_t logs = 0;
-    if (logs < 16) {
-        logs++;
+    if (myjb_hide_signal_fatal(sig)) {
         myjb_hide_log("myjb_hide: raise sig=%d", sig);
+        myjb_hide_log_backtrace("raise");
+        myjb_hide_snapshot("raise");
+    } else {
+        static uint32_t logs = 0;
+        if (logs < 16) {
+            logs++;
+            myjb_hide_log("myjb_hide: raise sig=%d", sig);
+        }
     }
-    if (myjb_hide_signal_fatal(sig)) myjb_hide_snapshot("raise");
     if (orig_raise_fn != NULL) return orig_raise_fn(sig);
     return -1;
 }
 
 static int myjb_hide_pthread_kill_hook(void *thread, int sig) {
-    static uint32_t logs = 0;
-    if (logs < 16) {
-        logs++;
+    if (myjb_hide_signal_fatal(sig)) {
         myjb_hide_log("myjb_hide: pthread_kill thread=%p sig=%d", thread, sig);
+        myjb_hide_log_backtrace("pthread_kill");
+        myjb_hide_snapshot("pthread_kill");
+    } else {
+        static uint32_t logs = 0;
+        if (logs < 16) {
+            logs++;
+            myjb_hide_log("myjb_hide: pthread_kill thread=%p sig=%d", thread, sig);
+        }
     }
-    if (myjb_hide_signal_fatal(sig)) myjb_hide_snapshot("pthread_kill");
     if (orig_pthread_kill_fn != NULL) return orig_pthread_kill_fn(thread, sig);
     return -1;
 }
 
 static void myjb_hide_underscore_exit_hook(int status) {
+    myjb_hide_log_backtrace("_exit");
     myjb_hide_snapshot("_exit");
     if (orig_underscore_exit_fn != NULL) orig_underscore_exit_fn(status);
     for (;;) { }
