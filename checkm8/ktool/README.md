@@ -81,9 +81,12 @@ make
 - `pongoOS_shellcode.bin` (+ `shellcode.bin`, `Pongo.bin`) — PongoOS
 - `checkra1n-kpf-ploosh.bin` — KPF của checkra1n build cho PongoOS (dump từ palera1n v2.0.0 beta 8)
 - `ramdisk.bin`, `overlay.bin` (binpack) — bootstrap palera1n (iOS 15+)
-- `legacy_kpf.bin`, `legacy_ramdisk.bin` — KPF + ramdisk loader gốc
-  checkra1n 0.12.4b (nguồn: kho `headers/` của
+- `legacy_kpf.bin` — KPF gốc checkra1n 0.12.4b (nguồn: kho `headers/` của
   [ra1npoc15](https://github.com/kok3shidoll/ra1npoc)) — dùng cho `--legacy` (iOS 12–14)
+- `legacy_ramdisk.bin` — ramdisk loader checkra1n 0.12.4b **đã repack myJB**:
+  `/payload` = `myjb_stage` (xem `stage/`), `/payload.real` = loaderd gốc.
+  Repack bằng `hfs.py` + `repack_stage.py` (validate: hash từng file, alt VH,
+  B-tree lookup/thread — bản gốc vẫn nằm trong git history)
 - `yolo_*.bin` — stage-2 checkm8 per-chip
 
 Kế hoạch: chuyển sang tải artifact có pin + checksum trong CI (như palera1n làm),
