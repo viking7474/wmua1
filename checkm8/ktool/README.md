@@ -17,8 +17,9 @@ Khác biệt so với openra1n gốc:
 - [x] Chuỗi legacy checkra1n 0.12.4b (`--legacy`) — đã jailbreak thành công trên máy iOS 12–14
 - [x] Windows driver auto-bind (`tools\fix_driver.cmd` + kit `winra1n_mobile_device.inf`) —
       libusbK cho 1227/1338/4141, hết treo "Waiting for PongoOS device", không cần Zadig
-- [ ] myJB stage thay `/payload` trong legacy ramdisk (v0: chẩn đoán + chain
-      loaderd; v1: fakefs) — nguồn `stage/`, build CI `build-stage.yml`
+- [ ] myJB stage trong legacy ramdisk (v1: fakefs) — nguồn `stage/`, build CI
+      `build-stage.yml`; cách thay trực tiếp `/payload` phá bước cài rootfs
+      (xem mục Payloads), hướng mới: hook `/pstage0`
 - [ ] Tích hợp myJB (loader/kdev) — xem `../../Checkm8_myJB_Integration.md` (C4–C6)
 - [ ] Payload pin + checksum (C2)
 
@@ -110,10 +111,18 @@ make
 - `ramdisk.bin`, `overlay.bin` (binpack) — bootstrap palera1n (iOS 15+)
 - `legacy_kpf.bin` — KPF gốc checkra1n 0.12.4b (nguồn: kho `headers/` của
   [ra1npoc15](https://github.com/kok3shidoll/ra1npoc)) — dùng cho `--legacy` (iOS 12–14)
-- `legacy_ramdisk.bin` — ramdisk loader checkra1n 0.12.4b **đã repack myJB**:
-  `/payload` = `myjb_stage` (xem `stage/`), `/payload.real` = loaderd gốc.
-  Repack bằng `hfs.py` + `repack_stage.py` (validate: hash từng file, alt VH,
-  B-tree lookup/thread — bản gốc vẫn nằm trong git history)
+- `legacy_ramdisk.bin` — ramdisk loader checkra1n 0.12.4b (stock, git 441edf1)
+  với **10-byte vá gate loaderd** tại `/payload` (sha1 patched
+  `179d82e6a29d96bbe0aa4af65acff328c974953c`, image sha256
+  `e0c0e7d7…272af2b`): bỏ whitelist CDHash client — nop csops tbnz @0x8448,
+  force dispatch branch @0x8688/0x86a0. Same-size in-place, không đổi cấu trúc
+  HFS (delta vs stock đúng 10 byte; validate fresh-parse + hash từng bước).
+  Bản cũ (stage thay `/payload` + `/payload.real`) **đã bỏ**: bước cài rootfs
+  chỉ mang `/payload` sang rootfs, `/payload.real` không theo → chuỗi
+  real-system chết trước khi job loaderd đăng ký (loader.app báo
+  "Connection invalid"; xem `log.txt` 18/10 dòng 10949–10954). Hướng stage
+  kế tiếp (v1 fakefs): hook `/pstage0` (vá string trong `/patch_dyld.ios`)
+  để giữ `/payload` nguyên vẹn cho rootfs install.
 - `yolo_*.bin` — stage-2 checkm8 per-chip
 
 Kế hoạch: chuyển sang tải artifact có pin + checksum trong CI (như palera1n làm),
