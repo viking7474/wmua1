@@ -12,6 +12,7 @@
 #include <syslog.h>
 
 #define MYJB_HIDE_MAX_HOOKS 64
+#define MYJB_HIDE_MAX_IMAGES 2048
 #define MYJB_HIDE_MAX_BULK_ENTRIES 160
 #define MYJB_HIDE_MAX_KEEP_EXTRA 8
 #define MYJB_HIDE_MAX_VISIBLE 1024
@@ -959,6 +960,33 @@ static intptr_t myjb_hide_image_slide_hook(uint32_t index) {
     return _dyld_get_image_vmaddr_slide(real);
 }
 
+static const struct dyld_all_image_infos *(*orig_get_all_image_infos)(void) = NULL;
+
+static const struct dyld_all_image_infos *myjb_hide_get_all_image_infos_hook(void) {
+    const struct dyld_all_image_infos *real = orig_get_all_image_infos();
+    if (real == NULL || real->infoArray == NULL || real->infoArrayCount > MYJB_HIDE_MAX_IMAGES) return real;
+
+    static struct dyld_image_info fake_array[MYJB_HIDE_MAX_IMAGES];
+    static struct dyld_all_image_infos fake_infos;
+    static bool fake_ready = false;
+
+    uint32_t visible = 0;
+    for (uint32_t i = 0; i < real->infoArrayCount; i++) {
+        const struct dyld_image_info *entry = &real->infoArray[i];
+        if (myjb_hide_image_path_hidden(entry->imageFilePath)) continue;
+        fake_array[visible++] = *entry;
+    }
+
+    if (!fake_ready) {
+        size_t prefix = offsetof(struct dyld_all_image_infos, dyldVersion);
+        memcpy(&fake_infos, real, prefix);
+        fake_ready = true;
+    }
+    fake_infos.infoArrayCount = visible;
+    fake_infos.infoArray = fake_array;
+    return &fake_infos;
+}
+
 static bool myjb_hide_caller_trusted(void *return_address) {
     Dl_info info = {0};
     if (return_address == NULL) return false;
@@ -1181,6 +1209,7 @@ static void myjb_hide_install_image_hooks(void) {
     orig_image_name = myjb_hide_install_hook("_dyld_get_image_name", (void *)myjb_hide_image_name_hook);
     orig_image_header = myjb_hide_install_hook("_dyld_get_image_header", (void *)myjb_hide_image_header_hook);
     orig_image_slide = myjb_hide_install_hook("_dyld_get_image_vmaddr_slide", (void *)myjb_hide_image_slide_hook);
+    orig_get_all_image_infos = myjb_hide_install_hook("_dyld_get_all_image_infos", (void *)myjb_hide_get_all_image_infos_hook);
 }
 
 void myjb_hide_start(void) {
