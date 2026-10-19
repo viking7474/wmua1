@@ -411,6 +411,39 @@ static bool myjb_hide_should_activate(void) {
     return false;
 }
 
+static bool g_hide_env_dyld_off = false;
+static bool g_hide_env_raw_off = false;
+static bool g_hide_env_addimage_off = false;
+static bool g_hide_env_guard_off = false;
+
+static void myjb_hide_load_env_flags(void) {
+    const char *dyld = getenv("MYJB_HIDE_DYLD");
+    const char *raw = getenv("MYJB_HIDE_RAW");
+    const char *addimage = getenv("MYJB_HIDE_ADDIMAGE");
+    const char *guard = getenv("MYJB_HIDE_GUARD");
+
+    g_hide_env_dyld_off = dyld != NULL && strcmp(dyld, "0") == 0;
+    g_hide_env_raw_off = g_hide_env_dyld_off || (raw != NULL && strcmp(raw, "0") == 0);
+    g_hide_env_addimage_off = g_hide_env_dyld_off || (addimage != NULL && strcmp(addimage, "0") == 0);
+    g_hide_env_guard_off = guard != NULL && strcmp(guard, "0") == 0;
+}
+
+static bool myjb_hide_dyld_disabled(void) {
+    return g_hide_env_dyld_off;
+}
+
+static bool myjb_hide_raw_disabled(void) {
+    return g_hide_env_raw_off;
+}
+
+static bool myjb_hide_addimage_disabled(void) {
+    return g_hide_env_addimage_off;
+}
+
+static bool myjb_hide_guard_disabled(void) {
+    return g_hide_env_guard_off;
+}
+
 typedef struct {
     void *target;
     void *original;
@@ -1249,6 +1282,7 @@ static void myjb_hide_apply_raw_image_infos(void) {
 }
 
 static void myjb_hide_refresh_raw_image_infos(void) {
+    if (myjb_hide_raw_disabled()) return;
     if (__atomic_test_and_set((void *)&g_raw_apply_active, __ATOMIC_ACQ_REL)) return;
     myjb_hide_apply_raw_image_infos();
     __atomic_clear(&g_raw_apply_active, __ATOMIC_RELEASE);
@@ -1665,6 +1699,8 @@ void myjb_hide_start(void) {
     if (g_hide_installed) return;
     g_hide_installed = true;
 
+    myjb_hide_load_env_flags();
+
     openlog("myjb_hide", LOG_NDELAY, LOG_USER);
 
     char exec_path[PATH_MAX] = {0};
@@ -1683,16 +1719,25 @@ void myjb_hide_start(void) {
     myjb_hide_load_env_keep();
     myjb_hide_log("myjb_hide: active in %s", exec_path);
     myjb_hide_log("myjb_hide: rules rev 4 (uuid, empty-path, /Library guard)");
+    myjb_hide_log("myjb_hide: switches raw=%d dyld=%d addimage=%d guard=%d",
+                  !myjb_hide_raw_disabled(), !myjb_hide_dyld_disabled(),
+                  !myjb_hide_addimage_disabled(), !myjb_hide_guard_disabled());
 
     myjb_hide_scrub_environ();
 
     myjb_hide_install_file_hooks();
-    myjb_hide_install_image_hooks();
-    myjb_hide_refresh_raw_image_infos();
-    myjb_hide_install_guard_hooks();
+    if (!myjb_hide_dyld_disabled()) {
+        myjb_hide_install_image_hooks();
+        myjb_hide_refresh_raw_image_infos();
+    }
+    if (!myjb_hide_guard_disabled()) {
+        myjb_hide_install_guard_hooks();
+    }
 
     myjb_hide_log("myjb_hide: %u hook(s) installed", g_hook_table_count);
 
-    _dyld_register_func_for_add_image(myjb_hide_uikit_added);
+    if (!myjb_hide_addimage_disabled()) {
+        _dyld_register_func_for_add_image(myjb_hide_uikit_added);
+    }
     g_add_callback_primed = true;
 }
