@@ -1,5 +1,6 @@
 #include <dlfcn.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef void *(*myjb_dlopen_handler_t)(const char *, int, void *, bool *);
@@ -58,6 +59,8 @@ __asm__(
     "  ldr  x9, [x9]\n"
     "  br   x9\n"
 );
+
+extern void myjb_interpose_dlsym(void);
 
 struct myjb_interpose_tuple {
     const void *replacement;
