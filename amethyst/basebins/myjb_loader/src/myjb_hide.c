@@ -420,6 +420,11 @@ static bool g_hide_env_guard_sysctl_off = false;
 static bool g_hide_env_guard_dl_off = false;
 static bool g_hide_env_guard_task_off = false;
 static bool g_hide_env_guard_sig_off = false;
+static bool g_hide_env_guard_dlopen_off = false;
+static bool g_hide_env_guard_dlpreflight_off = false;
+static bool g_hide_env_guard_dlsym_off = false;
+static bool g_hide_env_guard_dlrefresh_off = false;
+static bool g_hide_env_dl_trace = false;
 
 static bool myjb_hide_env_is_off(const char *name) {
     const char *env = getenv(name);
@@ -437,6 +442,13 @@ static void myjb_hide_load_env_flags(void) {
     g_hide_env_guard_dl_off = g_hide_env_guard_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_DL");
     g_hide_env_guard_task_off = g_hide_env_guard_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_TASK");
     g_hide_env_guard_sig_off = g_hide_env_guard_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_SIG");
+    g_hide_env_guard_dlopen_off = g_hide_env_guard_dl_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLOPEN");
+    g_hide_env_guard_dlpreflight_off = g_hide_env_guard_dl_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLPREFLIGHT");
+    g_hide_env_guard_dlsym_off = g_hide_env_guard_dl_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLSYM");
+    g_hide_env_guard_dlrefresh_off = myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLREFRESH");
+
+    const char *dl_trace = getenv("MYJB_HIDE_DL_TRACE");
+    g_hide_env_dl_trace = dl_trace != NULL && strcmp(dl_trace, "1") == 0;
 }
 
 static bool myjb_hide_dyld_disabled(void) {
@@ -1461,8 +1473,23 @@ static void *(*orig_dlopen)(const char *, int) = NULL;
 static int (*orig_dlopen_preflight)(const char *) = NULL;
 static void *(*orig_dlsym)(void *, const char *) = NULL;
 
+static void myjb_hide_dl_trace_target(const char *kind, const char *arg, void *return_address) {
+    static uint32_t trace_count = 0;
+    static bool trace_active = false;
+    if (!g_hide_env_dl_trace || trace_count >= 400 || trace_active) return;
+    trace_active = true;
+    trace_count++;
+    Dl_info caller = {0};
+    if (dladdr(return_address, &caller) == 0) caller.dli_fname = NULL;
+    myjb_hide_log("myjb_hide: %s trace [%s] caller=[%s]",
+                  kind, arg != NULL ? arg : "NULL",
+                  caller.dli_fname != NULL ? caller.dli_fname : "?");
+    trace_active = false;
+}
+
 static void *myjb_hide_dlopen_hook(const char *path, int mode) {
-    myjb_hide_refresh_throttled();
+    myjb_hide_dl_trace_target("dlopen", path, __builtin_return_address(0));
+    if (!g_hide_env_guard_dlrefresh_off) myjb_hide_refresh_throttled();
     if (path != NULL && (myjb_hide_path_hidden(path) || myjb_hide_image_path_hidden(path))) {
         if (!myjb_hide_caller_trusted(__builtin_return_address(0))) {
             myjb_hide_log_blocked("dlopen", path);
@@ -1474,7 +1501,8 @@ static void *myjb_hide_dlopen_hook(const char *path, int mode) {
 }
 
 static int myjb_hide_dlopen_preflight_hook(const char *path) {
-    myjb_hide_refresh_throttled();
+    myjb_hide_dl_trace_target("dlopen_preflight", path, __builtin_return_address(0));
+    if (!g_hide_env_guard_dlrefresh_off) myjb_hide_refresh_throttled();
     if (path != NULL && (myjb_hide_path_hidden(path) || myjb_hide_image_path_hidden(path))) {
         if (!myjb_hide_caller_trusted(__builtin_return_address(0))) {
             myjb_hide_log_blocked("dlopen_preflight", path);
@@ -1486,7 +1514,8 @@ static int myjb_hide_dlopen_preflight_hook(const char *path) {
 }
 
 static void *myjb_hide_dlsym_hook(void *handle, const char *symbol) {
-    myjb_hide_refresh_throttled();
+    myjb_hide_dl_trace_target("dlsym", symbol, __builtin_return_address(0));
+    if (!g_hide_env_guard_dlrefresh_off) myjb_hide_refresh_throttled();
     void *result = orig_dlsym != NULL ? orig_dlsym(handle, symbol) : NULL;
     if (result == NULL || symbol == NULL) return result;
 
@@ -1565,9 +1594,13 @@ static void myjb_hide_install_guard_hooks(void) {
         orig_sysctl = myjb_hide_install_hook("sysctl", (void *)myjb_hide_sysctl_hook);
         orig_sysctlbyname = myjb_hide_install_hook("sysctlbyname", (void *)myjb_hide_sysctlbyname_hook);
     }
-    if (!g_hide_env_guard_dl_off) {
+    if (!g_hide_env_guard_dlopen_off) {
         orig_dlopen = myjb_hide_install_hook("dlopen", (void *)myjb_hide_dlopen_hook);
+    }
+    if (!g_hide_env_guard_dlpreflight_off) {
         orig_dlopen_preflight = myjb_hide_install_hook("dlopen_preflight", (void *)myjb_hide_dlopen_preflight_hook);
+    }
+    if (!g_hide_env_guard_dlsym_off) {
         orig_dlsym = myjb_hide_install_hook("dlsym", (void *)myjb_hide_dlsym_hook);
     }
     if (!g_hide_env_guard_task_off) {
@@ -1740,12 +1773,15 @@ void myjb_hide_start(void) {
     myjb_hide_load_env_keep();
     myjb_hide_log("myjb_hide: active in %s", exec_path);
     myjb_hide_log("myjb_hide: rules rev 4 (uuid, empty-path, /Library guard)");
-    myjb_hide_log("myjb_hide: switches raw=%d dyld=%d addimage=%d guard=%d cs=%d sysctl=%d dl=%d task=%d sig=%d",
+    myjb_hide_log("myjb_hide: switches raw=%d dyld=%d addimage=%d guard=%d cs=%d sysctl=%d dl=%d task=%d sig=%d dlopen=%d dlpre=%d dlsym=%d dlrefresh=%d dltrace=%d",
                   !myjb_hide_raw_disabled(), !myjb_hide_dyld_disabled(),
                   !myjb_hide_addimage_disabled(), !myjb_hide_guard_disabled(),
                   !g_hide_env_guard_cs_off, !g_hide_env_guard_sysctl_off,
                   !g_hide_env_guard_dl_off, !g_hide_env_guard_task_off,
-                  !g_hide_env_guard_sig_off);
+                  !g_hide_env_guard_sig_off,
+                  !g_hide_env_guard_dlopen_off, !g_hide_env_guard_dlpreflight_off,
+                  !g_hide_env_guard_dlsym_off, !g_hide_env_guard_dlrefresh_off,
+                  g_hide_env_dl_trace);
 
     myjb_hide_scrub_environ();
 
