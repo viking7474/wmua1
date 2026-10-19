@@ -423,6 +423,7 @@ static bool g_hide_env_guard_sig_off = false;
 static bool g_hide_env_guard_dlopen_off = false;
 static bool g_hide_env_guard_dlpreflight_off = false;
 static bool g_hide_env_guard_dlsym_off = false;
+static bool g_hide_env_guard_dlsym_lite = false;
 static bool g_hide_env_guard_dlrefresh_off = false;
 static bool g_hide_env_dl_trace = false;
 
@@ -445,6 +446,8 @@ static void myjb_hide_load_env_flags(void) {
     g_hide_env_guard_dlopen_off = g_hide_env_guard_dl_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLOPEN");
     g_hide_env_guard_dlpreflight_off = g_hide_env_guard_dl_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLPREFLIGHT");
     g_hide_env_guard_dlsym_off = g_hide_env_guard_dl_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLSYM");
+    const char *dlsym_env = getenv("MYJB_HIDE_GUARD_DLSYM");
+    g_hide_env_guard_dlsym_lite = dlsym_env != NULL && strcmp(dlsym_env, "2") == 0;
     g_hide_env_guard_dlrefresh_off = myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLREFRESH");
 
     const char *dl_trace = getenv("MYJB_HIDE_DL_TRACE");
@@ -1000,6 +1003,93 @@ static bool myjb_hide_image_path_hidden(const char *name) {
     return false;
 }
 
+static bool myjb_hide_image_hidden_strict(const char *name, const struct mach_header *header) {
+    if (myjb_hide_header_uuid_hidden(header)) return true;
+    if (name == NULL || name[0] == '\0') return false;
+    if (myjb_hide_path_hidden(name)) return true;
+
+    const char *base = name + myjb_hide_basename_offset(name);
+    for (uint32_t i = 0; myjb_hide_image_names[i] != NULL; i++) {
+        if (strcasecmp(base, myjb_hide_image_names[i]) == 0) return true;
+    }
+    if (strncasecmp(base, "myjb-", 5) == 0) return true;
+    if (strncasecmp(base, "cy-", 3) == 0) return true;
+    return false;
+}
+
+#define MYJB_HIDE_MAX_HIDDEN_RANGES 16
+
+static struct {
+    uintptr_t start;
+    uintptr_t end;
+} g_hidden_ranges[MYJB_HIDE_MAX_HIDDEN_RANGES];
+static uint32_t g_hidden_ranges_count = 0;
+
+static void myjb_hide_image_range(const struct mach_header *header, uintptr_t *start_out, uintptr_t *end_out) {
+    if (header == NULL || header->magic != MH_MAGIC_64) return;
+    const struct mach_header_64 *h64 = (const struct mach_header_64 *)header;
+    const uint8_t *cmd = (const uint8_t *)header + sizeof(struct mach_header_64);
+    uint64_t slide = 0;
+    bool have_slide = false;
+    uint64_t end = 0;
+    for (uint32_t i = 0; i < h64->ncmds; i++) {
+        const struct load_command *lc = (const struct load_command *)cmd;
+        if (lc->cmdsize < sizeof(struct load_command)) break;
+        if (lc->cmd == LC_SEGMENT_64 && lc->cmdsize >= sizeof(struct segment_command_64)) {
+            const struct segment_command_64 *seg = (const struct segment_command_64 *)lc;
+            if (strcmp(seg->segname, "__TEXT") == 0) {
+                slide = (uint64_t)(uintptr_t)header - seg->vmaddr;
+                have_slide = true;
+            }
+            uint64_t seg_end = seg->vmaddr + seg->vmsize;
+            if (seg_end > end) end = seg_end;
+        }
+        cmd += lc->cmdsize;
+    }
+    if (!have_slide || end == 0) return;
+    *start_out = (uintptr_t)header;
+    *end_out = (uintptr_t)(slide + end);
+}
+
+static void myjb_hide_rebuild_hidden_ranges(void) {
+    uint32_t real_count = myjb_real_image_count();
+    if (real_count > 2000) return;
+
+    struct {
+        uintptr_t start;
+        uintptr_t end;
+    } tmp[MYJB_HIDE_MAX_HIDDEN_RANGES];
+    uint32_t count = 0;
+
+    for (uint32_t i = 0; i < real_count && count < MYJB_HIDE_MAX_HIDDEN_RANGES; i++) {
+        const struct mach_header *header = myjb_real_image_header(i);
+        if (header == NULL) continue;
+        if (!myjb_hide_image_hidden_strict(myjb_real_image_name(i), header)) continue;
+        uintptr_t start = 0;
+        uintptr_t end = 0;
+        myjb_hide_image_range(header, &start, &end);
+        if (start == 0 || end <= start) continue;
+        tmp[count].start = start;
+        tmp[count].end = end;
+        count++;
+    }
+
+    for (uint32_t i = 0; i < count; i++) {
+        g_hidden_ranges[i].start = tmp[i].start;
+        g_hidden_ranges[i].end = tmp[i].end;
+    }
+    __atomic_store_n(&g_hidden_ranges_count, count, __ATOMIC_RELEASE);
+}
+
+static bool myjb_hide_addr_hidden(const void *addr) {
+    uintptr_t p = (uintptr_t)addr;
+    uint32_t count = __atomic_load_n(&g_hidden_ranges_count, __ATOMIC_ACQUIRE);
+    for (uint32_t i = 0; i < count; i++) {
+        if (p >= g_hidden_ranges[i].start && p < g_hidden_ranges[i].end) return true;
+    }
+    return false;
+}
+
 static inline int myjb_hide_visible_lookup(uint32_t index, uint32_t *real_out) {
     uint32_t real_count = myjb_real_image_count();
     uint32_t visible = 0;
@@ -1318,6 +1408,7 @@ static void myjb_hide_refresh_throttled(void) {
     uint64_t t = (uint64_t)now.tv_sec * 1000000000ull + (uint64_t)now.tv_nsec;
     if (last_ns != 0 && t - last_ns < 50000000ull) return;
     last_ns = t;
+    myjb_hide_rebuild_hidden_ranges();
     myjb_hide_refresh_raw_image_infos();
 }
 
@@ -1515,13 +1606,10 @@ static int myjb_hide_dlopen_preflight_hook(const char *path) {
 
 static void *myjb_hide_dlsym_hook(void *handle, const char *symbol) {
     myjb_hide_dl_trace_target("dlsym", symbol, __builtin_return_address(0));
-    if (!g_hide_env_guard_dlrefresh_off) myjb_hide_refresh_throttled();
     void *result = orig_dlsym != NULL ? orig_dlsym(handle, symbol) : NULL;
+    if (g_hide_env_guard_dlsym_lite) return result;
     if (result == NULL || symbol == NULL) return result;
-
-    Dl_info info = {0};
-    if (dladdr(result, &info) == 0 || info.dli_fname == NULL) return result;
-    if (!myjb_hide_image_path_hidden(info.dli_fname)) return result;
+    if (!myjb_hide_addr_hidden(result)) return result;
     if (myjb_hide_caller_trusted(__builtin_return_address(0))) return result;
 
     myjb_hide_log_blocked("dlsym", symbol);
@@ -1773,18 +1861,20 @@ void myjb_hide_start(void) {
     myjb_hide_load_env_keep();
     myjb_hide_log("myjb_hide: active in %s", exec_path);
     myjb_hide_log("myjb_hide: rules rev 4 (uuid, empty-path, /Library guard)");
-    myjb_hide_log("myjb_hide: switches raw=%d dyld=%d addimage=%d guard=%d cs=%d sysctl=%d dl=%d task=%d sig=%d dlopen=%d dlpre=%d dlsym=%d dlrefresh=%d dltrace=%d",
+    myjb_hide_log("myjb_hide: switches raw=%d dyld=%d addimage=%d guard=%d cs=%d sysctl=%d dl=%d task=%d sig=%d dlopen=%d dlpre=%d dlsym=%d dlsymlite=%d dlrefresh=%d dltrace=%d",
                   !myjb_hide_raw_disabled(), !myjb_hide_dyld_disabled(),
                   !myjb_hide_addimage_disabled(), !myjb_hide_guard_disabled(),
                   !g_hide_env_guard_cs_off, !g_hide_env_guard_sysctl_off,
                   !g_hide_env_guard_dl_off, !g_hide_env_guard_task_off,
                   !g_hide_env_guard_sig_off,
                   !g_hide_env_guard_dlopen_off, !g_hide_env_guard_dlpreflight_off,
-                  !g_hide_env_guard_dlsym_off, !g_hide_env_guard_dlrefresh_off,
+                  !g_hide_env_guard_dlsym_off, g_hide_env_guard_dlsym_lite,
+                  !g_hide_env_guard_dlrefresh_off,
                   g_hide_env_dl_trace);
 
     myjb_hide_scrub_environ();
 
+    myjb_hide_rebuild_hidden_ranges();
     myjb_hide_install_file_hooks();
     if (!myjb_hide_dyld_disabled()) {
         myjb_hide_install_image_hooks();
