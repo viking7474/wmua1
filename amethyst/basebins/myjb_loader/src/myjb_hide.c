@@ -1,6 +1,7 @@
 #include "basebin_hook.h"
 #include "basebin_util.h"
 #include "myjb_hide.h"
+#include "myjb_test.h"
 
 #include <strings.h>
 #include <stdarg.h>
@@ -1486,6 +1487,8 @@ static int (*orig_sysctl)(int *, u_int, void *, size_t *, void *, size_t) = NULL
 static int (*orig_sysctlbyname)(const char *, void *, size_t *, void *, size_t) = NULL;
 
 static int myjb_hide_sysctl_hook(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+    int test_status = 0;
+    if (myjb_test_sysctl_hook(name, namelen, oldp, oldlenp, newp, newlen, &test_status)) return test_status;
     myjb_hide_refresh_throttled();
     int status = orig_sysctl(name, namelen, oldp, oldlenp, newp, newlen);
     if (status != 0 || name == NULL || oldp == NULL || oldlenp == NULL) return status;
@@ -1497,6 +1500,8 @@ static int myjb_hide_sysctl_hook(int *name, u_int namelen, void *oldp, size_t *o
 }
 
 static int myjb_hide_sysctlbyname_hook(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+    int test_status = 0;
+    if (myjb_test_sysctlbyname_hook(name, oldp, oldlenp, newp, newlen, &test_status)) return test_status;
     myjb_hide_refresh_throttled();
     int status = orig_sysctlbyname(name, oldp, oldlenp, newp, newlen);
     if (status != 0 || name == NULL || oldp == NULL || oldlenp == NULL) return status;

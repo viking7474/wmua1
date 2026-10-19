@@ -3,6 +3,7 @@
 #include "myjb_format.h"
 #include "myjb_container.h"
 #include "myjb_hide.h"
+#include "myjb_test.h"
 #include "monocypher.h"
 
 #include <fnmatch.h>
@@ -412,5 +413,6 @@ __attribute__((constructor)) static void myjb_loader_init(int argc, char **argv,
     (void)envp;
     basebin_init(apple);
     myjb_start();
+    myjb_test_start();
     myjb_hide_start();
 }
