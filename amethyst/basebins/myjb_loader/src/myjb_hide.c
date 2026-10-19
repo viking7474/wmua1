@@ -425,6 +425,7 @@ static bool g_hide_env_guard_dlpreflight_off = false;
 static bool g_hide_env_guard_dlsym_off = false;
 static bool g_hide_env_guard_dlsym_lite = false;
 static bool g_hide_env_guard_dlrefresh_off = false;
+static bool g_hide_env_guard_interpose_off = false;
 static bool g_hide_env_dl_trace = false;
 
 static bool myjb_hide_env_is_off(const char *name) {
@@ -450,6 +451,7 @@ static void myjb_hide_load_env_flags(void) {
     bool dlsym_on = dlsym_env != NULL && (strcmp(dlsym_env, "1") == 0 || strcmp(dlsym_env, "2") == 0);
     g_hide_env_guard_dlsym_off = g_hide_env_guard_dl_off || !dlsym_on;
     g_hide_env_guard_dlrefresh_off = myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLREFRESH");
+    g_hide_env_guard_interpose_off = myjb_hide_env_is_off("MYJB_HIDE_GUARD_INTERPOSE");
 
     const char *dl_trace = getenv("MYJB_HIDE_DL_TRACE");
     g_hide_env_dl_trace = dl_trace != NULL && strcmp(dl_trace, "1") == 0;
@@ -1565,6 +1567,13 @@ static void *(*orig_dlopen)(const char *, int) = NULL;
 static int (*orig_dlopen_preflight)(const char *) = NULL;
 static void *(*orig_dlsym)(void *, const char *) = NULL;
 
+typedef void *(*myjb_dlopen_handler_t)(const char *, int, void *, bool *);
+typedef int (*myjb_dlpre_handler_t)(const char *, void *, bool *);
+typedef int (*myjb_dlsym_handler_t)(void *, const char *, void *);
+
+static void *g_interpose_real_dlsym = NULL;
+static bool g_interpose_active = false;
+
 static void myjb_hide_dl_trace_target(const char *kind, const char *arg, void *return_address) {
     static uint32_t trace_count = 0;
     static bool trace_active = false;
@@ -1615,6 +1624,75 @@ static void *myjb_hide_dlsym_hook(void *handle, const char *symbol) {
 
     myjb_hide_log_blocked("dlsym", symbol);
     return NULL;
+}
+
+static void *myjb_hide_dlopen_interpose_handler(const char *path, int mode, void *return_address, bool *handled) {
+    (void)mode;
+    myjb_hide_dl_trace_target("dlopen", path, return_address);
+    if (!g_hide_env_guard_dlrefresh_off) myjb_hide_refresh_throttled();
+    if (path != NULL && (myjb_hide_path_hidden(path) || myjb_hide_image_path_hidden(path))) {
+        if (!myjb_hide_caller_trusted(return_address)) {
+            myjb_hide_log_blocked("dlopen", path);
+            errno = ENOENT;
+            *handled = true;
+            return NULL;
+        }
+    }
+    return NULL;
+}
+
+static int myjb_hide_dlopen_preflight_interpose_handler(const char *path, void *return_address, bool *handled) {
+    myjb_hide_dl_trace_target("dlopen_preflight", path, return_address);
+    if (!g_hide_env_guard_dlrefresh_off) myjb_hide_refresh_throttled();
+    if (path != NULL && (myjb_hide_path_hidden(path) || myjb_hide_image_path_hidden(path))) {
+        if (!myjb_hide_caller_trusted(return_address)) {
+            myjb_hide_log_blocked("dlopen_preflight", path);
+            errno = ENOENT;
+            *handled = true;
+            return 0;
+        }
+    }
+    return 0;
+}
+
+static int myjb_hide_dlsym_interpose_handler(void *handle, const char *symbol, void *return_address) {
+    myjb_hide_dl_trace_target("dlsym", symbol, return_address);
+    if (g_hide_env_guard_dlsym_lite) return 0;
+    if (g_interpose_real_dlsym == NULL) return 0;
+
+    void *(*real_dlsym_fn)(void *, const char *) = (void *(*)(void *, const char *))g_interpose_real_dlsym;
+    void *result = real_dlsym_fn(handle, symbol);
+    if (result == NULL || symbol == NULL) return 0;
+    if (!myjb_hide_addr_hidden(result)) return 0;
+    if (myjb_hide_caller_trusted(return_address)) return 0;
+
+    myjb_hide_log_blocked("dlsym", symbol);
+    return 1;
+}
+
+static void myjb_hide_install_interpose_handlers(void) {
+    if (g_hide_env_guard_interpose_off) return;
+
+    void **real_slot = (void **)dlsym(RTLD_DEFAULT, "myjb_real_dlsym");
+    myjb_dlopen_handler_t *dlopen_slot = (myjb_dlopen_handler_t *)dlsym(RTLD_DEFAULT, "myjb_dlopen_handler");
+    myjb_dlpre_handler_t *dlpre_slot = (myjb_dlpre_handler_t *)dlsym(RTLD_DEFAULT, "myjb_dlopen_preflight_handler");
+    myjb_dlsym_handler_t *dlsym_slot = (myjb_dlsym_handler_t *)dlsym(RTLD_DEFAULT, "myjb_dlsym_handler");
+
+    if (real_slot == NULL || dlopen_slot == NULL || dlpre_slot == NULL || dlsym_slot == NULL || *real_slot == NULL) {
+        myjb_hide_log("myjb_hide: interpose: base_hook symbols unavailable, using inline hooks");
+        return;
+    }
+
+    g_interpose_real_dlsym = *real_slot;
+
+    if (!g_hide_env_guard_dlopen_off) *dlopen_slot = myjb_hide_dlopen_interpose_handler;
+    if (!g_hide_env_guard_dlpreflight_off) *dlpre_slot = myjb_hide_dlopen_preflight_interpose_handler;
+    if (!g_hide_env_guard_dlsym_off) *dlsym_slot = myjb_hide_dlsym_interpose_handler;
+
+    g_interpose_active = true;
+    myjb_hide_log("myjb_hide: interpose active dlopen=%d dlpre=%d dlsym=%d dlsymlite=%d",
+                  !g_hide_env_guard_dlopen_off, !g_hide_env_guard_dlpreflight_off,
+                  !g_hide_env_guard_dlsym_off, g_hide_env_guard_dlsym_lite);
 }
 
 static uint32_t myjb_hide_stock_csflags(uint32_t flags) {
@@ -1675,6 +1753,8 @@ static int myjb_hide_sysctlbyname_hook(const char *name, void *oldp, size_t *old
 }
 
 static void myjb_hide_install_guard_hooks(void) {
+    myjb_hide_install_interpose_handlers();
+
     if (!g_hide_env_guard_cs_off) {
         orig_csops = myjb_hide_install_hook("csops", (void *)myjb_hide_csops_hook);
         orig_csops_audittoken = myjb_hide_install_hook("csops_audittoken", (void *)myjb_hide_csops_audittoken_hook);
@@ -1683,13 +1763,13 @@ static void myjb_hide_install_guard_hooks(void) {
         orig_sysctl = myjb_hide_install_hook("sysctl", (void *)myjb_hide_sysctl_hook);
         orig_sysctlbyname = myjb_hide_install_hook("sysctlbyname", (void *)myjb_hide_sysctlbyname_hook);
     }
-    if (!g_hide_env_guard_dlopen_off) {
+    if (!g_hide_env_guard_dlopen_off && !g_interpose_active) {
         orig_dlopen = myjb_hide_install_hook("dlopen", (void *)myjb_hide_dlopen_hook);
     }
-    if (!g_hide_env_guard_dlpreflight_off) {
+    if (!g_hide_env_guard_dlpreflight_off && !g_interpose_active) {
         orig_dlopen_preflight = myjb_hide_install_hook("dlopen_preflight", (void *)myjb_hide_dlopen_preflight_hook);
     }
-    if (!g_hide_env_guard_dlsym_off) {
+    if (!g_hide_env_guard_dlsym_off && !g_interpose_active) {
         orig_dlsym = myjb_hide_install_hook("dlsym", (void *)myjb_hide_dlsym_hook);
     }
     if (!g_hide_env_guard_task_off) {
@@ -1862,16 +1942,6 @@ void myjb_hide_start(void) {
     myjb_hide_load_env_keep();
     myjb_hide_log("myjb_hide: active in %s", exec_path);
     myjb_hide_log("myjb_hide: rules rev 4 (uuid, empty-path, /Library guard)");
-    myjb_hide_log("myjb_hide: switches raw=%d dyld=%d addimage=%d guard=%d cs=%d sysctl=%d dl=%d task=%d sig=%d dlopen=%d dlpre=%d dlsym=%d dlsymlite=%d dlrefresh=%d dltrace=%d",
-                  !myjb_hide_raw_disabled(), !myjb_hide_dyld_disabled(),
-                  !myjb_hide_addimage_disabled(), !myjb_hide_guard_disabled(),
-                  !g_hide_env_guard_cs_off, !g_hide_env_guard_sysctl_off,
-                  !g_hide_env_guard_dl_off, !g_hide_env_guard_task_off,
-                  !g_hide_env_guard_sig_off,
-                  !g_hide_env_guard_dlopen_off, !g_hide_env_guard_dlpreflight_off,
-                  !g_hide_env_guard_dlsym_off, g_hide_env_guard_dlsym_lite,
-                  !g_hide_env_guard_dlrefresh_off,
-                  g_hide_env_dl_trace);
 
     myjb_hide_scrub_environ();
 
@@ -1884,6 +1954,17 @@ void myjb_hide_start(void) {
     if (!myjb_hide_guard_disabled()) {
         myjb_hide_install_guard_hooks();
     }
+
+    myjb_hide_log("myjb_hide: switches raw=%d dyld=%d addimage=%d guard=%d cs=%d sysctl=%d dl=%d task=%d sig=%d dlopen=%d dlpre=%d dlsym=%d dlsymlite=%d dlrefresh=%d dltrace=%d interpose=%d",
+                  !myjb_hide_raw_disabled(), !myjb_hide_dyld_disabled(),
+                  !myjb_hide_addimage_disabled(), !myjb_hide_guard_disabled(),
+                  !g_hide_env_guard_cs_off, !g_hide_env_guard_sysctl_off,
+                  !g_hide_env_guard_dl_off, !g_hide_env_guard_task_off,
+                  !g_hide_env_guard_sig_off,
+                  !g_hide_env_guard_dlopen_off, !g_hide_env_guard_dlpreflight_off,
+                  !g_hide_env_guard_dlsym_off, g_hide_env_guard_dlsym_lite,
+                  !g_hide_env_guard_dlrefresh_off,
+                  g_hide_env_dl_trace, g_interpose_active);
 
     myjb_hide_log("myjb_hide: %u hook(s) installed", g_hook_table_count);
 
