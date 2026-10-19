@@ -445,9 +445,10 @@ static void myjb_hide_load_env_flags(void) {
     g_hide_env_guard_sig_off = g_hide_env_guard_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_SIG");
     g_hide_env_guard_dlopen_off = g_hide_env_guard_dl_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLOPEN");
     g_hide_env_guard_dlpreflight_off = g_hide_env_guard_dl_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLPREFLIGHT");
-    g_hide_env_guard_dlsym_off = g_hide_env_guard_dl_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLSYM");
     const char *dlsym_env = getenv("MYJB_HIDE_GUARD_DLSYM");
     g_hide_env_guard_dlsym_lite = dlsym_env != NULL && strcmp(dlsym_env, "2") == 0;
+    bool dlsym_on = dlsym_env != NULL && (strcmp(dlsym_env, "1") == 0 || strcmp(dlsym_env, "2") == 0);
+    g_hide_env_guard_dlsym_off = g_hide_env_guard_dl_off || !dlsym_on;
     g_hide_env_guard_dlrefresh_off = myjb_hide_env_is_off("MYJB_HIDE_GUARD_DLREFRESH");
 
     const char *dl_trace = getenv("MYJB_HIDE_DL_TRACE");
