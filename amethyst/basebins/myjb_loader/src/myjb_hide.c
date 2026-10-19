@@ -415,17 +415,28 @@ static bool g_hide_env_dyld_off = false;
 static bool g_hide_env_raw_off = false;
 static bool g_hide_env_addimage_off = false;
 static bool g_hide_env_guard_off = false;
+static bool g_hide_env_guard_cs_off = false;
+static bool g_hide_env_guard_sysctl_off = false;
+static bool g_hide_env_guard_dl_off = false;
+static bool g_hide_env_guard_task_off = false;
+static bool g_hide_env_guard_sig_off = false;
+
+static bool myjb_hide_env_is_off(const char *name) {
+    const char *env = getenv(name);
+    return env != NULL && strcmp(env, "0") == 0;
+}
 
 static void myjb_hide_load_env_flags(void) {
-    const char *dyld = getenv("MYJB_HIDE_DYLD");
-    const char *raw = getenv("MYJB_HIDE_RAW");
-    const char *addimage = getenv("MYJB_HIDE_ADDIMAGE");
-    const char *guard = getenv("MYJB_HIDE_GUARD");
+    g_hide_env_dyld_off = myjb_hide_env_is_off("MYJB_HIDE_DYLD");
+    g_hide_env_raw_off = g_hide_env_dyld_off || myjb_hide_env_is_off("MYJB_HIDE_RAW");
+    g_hide_env_addimage_off = g_hide_env_dyld_off || myjb_hide_env_is_off("MYJB_HIDE_ADDIMAGE");
+    g_hide_env_guard_off = myjb_hide_env_is_off("MYJB_HIDE_GUARD");
 
-    g_hide_env_dyld_off = dyld != NULL && strcmp(dyld, "0") == 0;
-    g_hide_env_raw_off = g_hide_env_dyld_off || (raw != NULL && strcmp(raw, "0") == 0);
-    g_hide_env_addimage_off = g_hide_env_dyld_off || (addimage != NULL && strcmp(addimage, "0") == 0);
-    g_hide_env_guard_off = guard != NULL && strcmp(guard, "0") == 0;
+    g_hide_env_guard_cs_off = g_hide_env_guard_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_CS");
+    g_hide_env_guard_sysctl_off = g_hide_env_guard_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_SYSCTL");
+    g_hide_env_guard_dl_off = g_hide_env_guard_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_DL");
+    g_hide_env_guard_task_off = g_hide_env_guard_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_TASK");
+    g_hide_env_guard_sig_off = g_hide_env_guard_off || myjb_hide_env_is_off("MYJB_HIDE_GUARD_SIG");
 }
 
 static bool myjb_hide_dyld_disabled(void) {
@@ -1546,20 +1557,30 @@ static int myjb_hide_sysctlbyname_hook(const char *name, void *oldp, size_t *old
 }
 
 static void myjb_hide_install_guard_hooks(void) {
-    orig_csops = myjb_hide_install_hook("csops", (void *)myjb_hide_csops_hook);
-    orig_csops_audittoken = myjb_hide_install_hook("csops_audittoken", (void *)myjb_hide_csops_audittoken_hook);
-    orig_sysctl = myjb_hide_install_hook("sysctl", (void *)myjb_hide_sysctl_hook);
-    orig_sysctlbyname = myjb_hide_install_hook("sysctlbyname", (void *)myjb_hide_sysctlbyname_hook);
-    orig_dlopen = myjb_hide_install_hook("dlopen", (void *)myjb_hide_dlopen_hook);
-    orig_dlopen_preflight = myjb_hide_install_hook("dlopen_preflight", (void *)myjb_hide_dlopen_preflight_hook);
-    orig_dlsym = myjb_hide_install_hook("dlsym", (void *)myjb_hide_dlsym_hook);
-    orig_task_info = myjb_hide_install_hook("task_info", (void *)myjb_hide_task_info_hook);
-    orig_abort_fn = myjb_hide_install_hook("abort", (void *)myjb_hide_abort_hook);
-    orig_exit_fn = myjb_hide_install_hook("exit", (void *)myjb_hide_exit_hook);
-    orig_kill_fn = myjb_hide_install_hook("kill", (void *)myjb_hide_kill_hook);
-    orig_raise_fn = myjb_hide_install_hook("raise", (void *)myjb_hide_raise_hook);
-    orig_pthread_kill_fn = myjb_hide_install_hook("pthread_kill", (void *)myjb_hide_pthread_kill_hook);
-    orig_underscore_exit_fn = myjb_hide_install_hook("_exit", (void *)myjb_hide_underscore_exit_hook);
+    if (!g_hide_env_guard_cs_off) {
+        orig_csops = myjb_hide_install_hook("csops", (void *)myjb_hide_csops_hook);
+        orig_csops_audittoken = myjb_hide_install_hook("csops_audittoken", (void *)myjb_hide_csops_audittoken_hook);
+    }
+    if (!g_hide_env_guard_sysctl_off) {
+        orig_sysctl = myjb_hide_install_hook("sysctl", (void *)myjb_hide_sysctl_hook);
+        orig_sysctlbyname = myjb_hide_install_hook("sysctlbyname", (void *)myjb_hide_sysctlbyname_hook);
+    }
+    if (!g_hide_env_guard_dl_off) {
+        orig_dlopen = myjb_hide_install_hook("dlopen", (void *)myjb_hide_dlopen_hook);
+        orig_dlopen_preflight = myjb_hide_install_hook("dlopen_preflight", (void *)myjb_hide_dlopen_preflight_hook);
+        orig_dlsym = myjb_hide_install_hook("dlsym", (void *)myjb_hide_dlsym_hook);
+    }
+    if (!g_hide_env_guard_task_off) {
+        orig_task_info = myjb_hide_install_hook("task_info", (void *)myjb_hide_task_info_hook);
+    }
+    if (!g_hide_env_guard_sig_off) {
+        orig_abort_fn = myjb_hide_install_hook("abort", (void *)myjb_hide_abort_hook);
+        orig_exit_fn = myjb_hide_install_hook("exit", (void *)myjb_hide_exit_hook);
+        orig_kill_fn = myjb_hide_install_hook("kill", (void *)myjb_hide_kill_hook);
+        orig_raise_fn = myjb_hide_install_hook("raise", (void *)myjb_hide_raise_hook);
+        orig_pthread_kill_fn = myjb_hide_install_hook("pthread_kill", (void *)myjb_hide_pthread_kill_hook);
+        orig_underscore_exit_fn = myjb_hide_install_hook("_exit", (void *)myjb_hide_underscore_exit_hook);
+    }
 }
 
 static IMP g_orig_canOpenURL = NULL;
@@ -1719,9 +1740,12 @@ void myjb_hide_start(void) {
     myjb_hide_load_env_keep();
     myjb_hide_log("myjb_hide: active in %s", exec_path);
     myjb_hide_log("myjb_hide: rules rev 4 (uuid, empty-path, /Library guard)");
-    myjb_hide_log("myjb_hide: switches raw=%d dyld=%d addimage=%d guard=%d",
+    myjb_hide_log("myjb_hide: switches raw=%d dyld=%d addimage=%d guard=%d cs=%d sysctl=%d dl=%d task=%d sig=%d",
                   !myjb_hide_raw_disabled(), !myjb_hide_dyld_disabled(),
-                  !myjb_hide_addimage_disabled(), !myjb_hide_guard_disabled());
+                  !myjb_hide_addimage_disabled(), !myjb_hide_guard_disabled(),
+                  !g_hide_env_guard_cs_off, !g_hide_env_guard_sysctl_off,
+                  !g_hide_env_guard_dl_off, !g_hide_env_guard_task_off,
+                  !g_hide_env_guard_sig_off);
 
     myjb_hide_scrub_environ();
 
