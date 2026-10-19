@@ -6,6 +6,9 @@
 #include "codesign.h"
 #include "ppl.h"
 #include "trustcache.h"
+#include <mach/task_info.h>
+
+extern kern_return_t task_for_pid(mach_port_t target_tport, int pid, mach_port_t *t);
 
 kinfo_t *kinfo = NULL;
 static bool using_tnsv2 = false;
@@ -20,7 +23,12 @@ static int init_info(void) {
     kinfo->using_tnsv2 = 0;
 
     host_get_special_port(mach_host_self(), HOST_LOCAL_NODE, 4, &kinfo->tfp0);
-    if (!MACH_PORT_VALID(kinfo->tfp0)) return -1;
+    if (!MACH_PORT_VALID(kinfo->tfp0)) {
+        mach_port_t kernel_task = MACH_PORT_NULL;
+        if (task_for_pid(mach_task_self(), 0, &kernel_task) == KERN_SUCCESS && MACH_PORT_VALID(kernel_task)) {
+            kinfo->tfp0 = kernel_task;
+        }
+    }
 
     char str[64] = {0};
     CFDictionaryRef dict = _CFCopySystemVersionDictionary();
@@ -138,78 +146,93 @@ static int init_info(void) {
     }
 
     xpc_object_t plist = xpc_open_plist("/amethyst/handoff.plist");
-    if (plist == NULL) return -1;
+    if (plist != NULL) {
+        kinfo->kern_proc_addr = dict_get_u64(plist, "kern_proc_addr");
+        kinfo->kern_task_addr = dict_get_u64(plist, "kern_task_addr");
+        kinfo->kernel_base = dict_get_u64(plist, "kernel_base");
+        kinfo->kernel_slide = dict_get_u64(plist, "kernel_slide");
+        kinfo->cpu_ttep = dict_get_u64(plist, "cpu_ttep");
+        kinfo->patches.dynamic_trustcache = dict_get_u64(plist, "dynamic_trustcache");
+        kinfo->patches.static_trustcache = dict_get_u64(plist, "static_trustcache");
+        kinfo->patches.ptov_table = dict_get_u64(plist, "ptov_table");
+        kinfo->patches.pidhashtbl_ptr = dict_get_u64(plist, "pidhashtbl_ptr");
+        kinfo->patches.pidhash_ptr = dict_get_u64(plist, "pidhash_ptr");
+        kinfo->patches.gPhysBase = dict_get_u64(plist, "gPhysBase");
+        kinfo->patches.gVirtBase = dict_get_u64(plist, "gVirtBase");
+        kinfo->patches.pplrw_entry = dict_get_u64(plist, "pplrw_entry");
+        kinfo->patches.pplrw_mapping_va = dict_get_u64(plist, "pplrw_mapping_va");
+        kinfo->patches.pplrw_mapping_pa = dict_get_u64(plist, "pplrw_mapping_pa");
 
-    kinfo->kern_proc_addr = dict_get_u64(plist, "kern_proc_addr");
-    kinfo->kern_task_addr = dict_get_u64(plist, "kern_task_addr");
-    kinfo->kernel_base = dict_get_u64(plist, "kernel_base");
-    kinfo->kernel_slide = dict_get_u64(plist, "kernel_slide");
-    kinfo->cpu_ttep = dict_get_u64(plist, "cpu_ttep");
-    kinfo->patches.dynamic_trustcache = dict_get_u64(plist, "dynamic_trustcache");
-    kinfo->patches.static_trustcache = dict_get_u64(plist, "static_trustcache");
-    kinfo->patches.ptov_table = dict_get_u64(plist, "ptov_table");
-    kinfo->patches.pidhashtbl_ptr = dict_get_u64(plist, "pidhashtbl_ptr");
-    kinfo->patches.pidhash_ptr = dict_get_u64(plist, "pidhash_ptr");
-    kinfo->patches.gPhysBase = dict_get_u64(plist, "gPhysBase");
-    kinfo->patches.gVirtBase = dict_get_u64(plist, "gVirtBase");
-    kinfo->patches.pplrw_entry = dict_get_u64(plist, "pplrw_entry");
-    kinfo->patches.pplrw_mapping_va = dict_get_u64(plist, "pplrw_mapping_va");
-    kinfo->patches.pplrw_mapping_pa = dict_get_u64(plist, "pplrw_mapping_pa");
+        if (dict_get_u64(plist, "tnsv2") == 0x4141) {
+            kinfo->using_tnsv2 = 1;
+        }
 
-    if (dict_get_u64(plist, "tnsv2") == 0x4141) {
-        kinfo->using_tnsv2 = 1;
+        xpc_release(plist);
+    } else if (MACH_PORT_VALID(kinfo->tfp0)) {
+        task_dyld_info_data_t dyld_info = {0};
+        mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
+        if (task_info(kinfo->tfp0, TASK_DYLD_INFO, (task_info_t)&dyld_info, &count) == KERN_SUCCESS
+            && dyld_info.all_image_info_size != 0) {
+            kinfo->kernel_slide = dyld_info.all_image_info_size;
+            kinfo->kernel_base = 0xfffffff007004000ULL + kinfo->kernel_slide;
+        }
     }
 
     if (getenv("AMETHYST") == NULL) {
         kinfo->first_run = 1;
     }
 
-    xpc_release(plist);
     return 0;
 }
 __attribute__((constructor)) void ctor(int argc, char **argv, char **envp, char **apple) {
     if (basebin_init(apple) != 0 || init_info() != 0) return;
-    if ((kinfo->self_proc_addr = find_proc_for_pid(getpid())) == 0) return;
-    if ((kinfo->self_task_addr = find_task_for_pid(getpid())) == 0) return;
-    if ((kinfo->self_port_addr = find_ipc_port(mach_task_self())) == 0) return;
 
-    set_mac_slot(-1, kinfo->self_proc_addr, SANDBOX_SLOT, 0);
-    add_cs_flag(-1, kinfo->self_proc_addr, CS_PLATFORM_PATH|CS_DEBUGGED|CS_INVALID_ALLOWED|CS_GET_TASK_ALLOW|CS_VALID);
-    remove_cs_flag(-1, kinfo->self_proc_addr, CS_KILL|CS_HARD|CS_RESTRICT|CS_ENFORCEMENT|CS_REQUIRE_LV);
+    bool kernel_ready = (kinfo->kern_proc_addr != 0 && kinfo->kern_task_addr != 0);
+    if (kernel_ready) {
+        if ((kinfo->self_proc_addr = find_proc_for_pid(getpid())) == 0) return;
+        if ((kinfo->self_task_addr = find_task_for_pid(getpid())) == 0) return;
+        if ((kinfo->self_port_addr = find_ipc_port(mach_task_self())) == 0) return;
+
+        set_mac_slot(-1, kinfo->self_proc_addr, SANDBOX_SLOT, 0);
+        add_cs_flag(-1, kinfo->self_proc_addr, CS_PLATFORM_PATH|CS_DEBUGGED|CS_INVALID_ALLOWED|CS_GET_TASK_ALLOW|CS_VALID);
+        remove_cs_flag(-1, kinfo->self_proc_addr, CS_KILL|CS_HARD|CS_RESTRICT|CS_ENFORCEMENT|CS_REQUIRE_LV);
+    }
 
 #ifdef __arm64e__
-    uint64_t self_vm_map = kread64(kinfo->self_task_addr + koffsetof(task, vm_map));
-    if (!KADDR_VALID(self_vm_map)) return;
+    if (kernel_ready) {
+        uint64_t self_vm_map = kread64(kinfo->self_task_addr + koffsetof(task, vm_map));
+        if (!KADDR_VALID(self_vm_map)) return;
 
-    uint64_t self_pmap = kread64(self_vm_map + koffsetof(vm_map, pmap));
-    if (!KADDR_VALID(self_pmap)) return;
+        uint64_t self_pmap = kread64(self_vm_map + koffsetof(vm_map, pmap));
+        if (!KADDR_VALID(self_pmap)) return;
 
-    kinfo->self_ttep = kread64(self_pmap + koffsetof(pmap, ttep));
-    if (kinfo->self_ttep == 0) return;
+        kinfo->self_ttep = kread64(self_pmap + koffsetof(pmap, ttep));
+        if (kinfo->self_ttep == 0) return;
 
-    if (kinfo->first_run == 0) {
-        if (kread8(self_pmap + koffsetof(pmap, cs_enforced)) == 1) {
-            ppl_write8(self_pmap + koffsetof(pmap, cs_enforced), 0);
+        if (kinfo->first_run == 0) {
+            if (kread8(self_pmap + koffsetof(pmap, cs_enforced)) == 1) {
+                ppl_write8(self_pmap + koffsetof(pmap, cs_enforced), 0);
 
-            uint64_t pmap_cs_entry = proc_get_pmap_cs_entry(kinfo->self_proc_addr);
-            if (pmap_cs_entry != 0) {
-                uint32_t current_trustlevel = kread32(pmap_cs_entry + koffsetof(pmap_cs_code_directory, trust));
-                if (current_trustlevel != 1) {
-                    ppl_write32(pmap_cs_entry + koffsetof(pmap_cs_code_directory, trust), 1);
-                }
-            }    
+                uint64_t pmap_cs_entry = proc_get_pmap_cs_entry(kinfo->self_proc_addr);
+                if (pmap_cs_entry != 0) {
+                    uint32_t current_trustlevel = kread32(pmap_cs_entry + koffsetof(pmap_cs_code_directory, trust));
+                    if (current_trustlevel != 1) {
+                        ppl_write32(pmap_cs_entry + koffsetof(pmap_cs_code_directory, trust), 1);
+                    }
+                }    
+            }
         }
     }
 #endif
 
-    if (trustcache_init() != 0) return;
+    if (trustcache_init() != 0 && kernel_ready) return;
 #ifndef __arm64e__
-    if (kinfo->first_run == 1 && kinfo->using_tnsv2 == 1) {
+    if (kernel_ready && kinfo->first_run == 1 && kinfo->using_tnsv2 == 1) {
         trustcache_lock_add_binary("/usr/lib/dyld_patch");
     }
 #endif
 
-    if (kinfo->first_run == 0 && kinfo->using_tnsv2 == 1) {
+    if (kernel_ready && kinfo->first_run == 0 && kinfo->using_tnsv2 == 1) {
         update_jailbreak();
     }
 

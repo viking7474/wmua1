@@ -41,6 +41,7 @@ static bool loader_blocked(const char *path, char **argv, posix_spawnattr_t *att
 
 int process_binary(const char *path) {
     if (strcmp(path, "/usr/libexec/xpcproxy") == 0) return 0;
+    if (kinfo->kern_proc_addr == 0 || kinfo->kern_task_addr == 0) return 0;
     macho_ctx_t *macho = macho_load(path);
     if (macho == NULL) return -1;
     int status = 0;

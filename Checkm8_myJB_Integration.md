@@ -103,7 +103,7 @@ với tool chạy Windows, dựa trên 2 repo bạn đưa + palera1n (nguồn pa
 | C1 | Tool Windows | `checkm8/ktool/` (fork openra1n) | ✅ scaffold xong: giữ gaster+libusb, `boot.py` port sang C (`pongo_send_cmd`/`pongo_upload`/`pongo_run_palera1n`), binary `myjb_ktool`; CI `build-checkm8.yml` (mingw + linux) — **Windows ✅** (exe mingw), **Linux ❌** (đang điều tra) |
 | C2 | Payload pin | build script/CI | tải `checkra1n-kpf-pongo`, `ramdisk.dmg`, `binpack.dmg`, `Pongo.bin` từ CDN + checksum; không commit binary; Pongo build từ palera1n/PongoOS (MIT) nếu cần |
 | C3 | Driver layer | tool | checkm8 cần USB Reset thật **và** hủy control transfer đúng timing (từ stage 2): dùng **libusbK** qua Zadig (đổi driver cho cả DFU 1227 lẫn Pongo 4141). WinUSB không reset được device; **UsbDk ❌** — backend usbdk của libusb 1.0.27 có `cancel_transfer = NULL`, đã kiểm chứng thực tế: treo ngay sau "Setting up the exploit". Gộp "Fix Driver" như WinRa1n 2.x |
-| C4 | Loader trên bootstrap | deb myJB → `/var/jb/usr/lib/TweakInject/myjb_loader.dylib` + `.plist` | ✅ v1: `checkm8/package/` (control, postinst + prerm, `build.sh`); **postinst mirror rootful** vào `/Library/MobileSubstrate/DynamicLibraries` (Cydia Substrate) + `/usr/lib/TweakInject` (libhooker/odysseyra1n) khi thư mục tồn tại; loader fallback khi thiếu jbserver; CI `build.yml` đóng gói deb (artifact `myjb-checkm8`) + tweak E2E (`myjb-e2e-testtweak`). **E2E ✅ verified iPhone 6s iOS 13.5.1** (container → kdev → dlopen, `e2e_ok`). Gotcha: Substrate classic (iOS 9+) **không** coi `Filter` rỗng là mọi process → postinst ghi plist rootful `Bundles = (springboard, Security, UIKit, Foundation)`; plist rỗng chỉ dành cho ElleKit rootless |
+| C4 | Loader trên bootstrap | deb myJB | ✅ v1: `checkm8/package/` — payload tách theo arch: rootless (`iphoneos-arm64`) → `/var/jb/usr/lib/TweakInject/myjb_loader.dylib` + `.plist` (filter rỗng, ElleKit); rootful (`iphoneos-arm`, checkra1n 12-14) → `/usr/lib/myjb_loader.dylib` (**không đụng `/var/jb`** — SDK chống JB MB Bank abort chỉ vì path này tồn tại, verified 13.5.1), postinst mirror vào `/Library/MobileSubstrate/DynamicLibraries` (Cydia Substrate) + `/usr/lib/TweakInject` (libhooker/ElleKit) **chỉ khi engine thật sự có mặt**; loader fallback khi thiếu jbserver; CI `build.yml` đóng gói deb (artifact `myjb-checkm8`) + tweak E2E (`myjb-e2e-testtweak`). **E2E ✅ verified iPhone 6s iOS 13.5.1** (container → kdev → dlopen, `e2e_ok`). Gotcha: Substrate classic (iOS 9+) **không** coi `Filter` rỗng là mọi process → postinst ghi plist rootful `Bundles = (springboard, Security, UIKit, Foundation)`; plist rỗng chỉ dành cho ElleKit rootless. **Substrate-free injector (basebins) — xem §6** |
 | C5 | kdev service | postinst deb (v1) + myjbd (v2) | 🟡 v1: postinst sinh 32B `/var/mobile/Library/MyJB/kdev` (chmod 600, chown mobile) + `kdev.txt` (hex) để copy sang tool; v2: myjbd `myjbctl kdev` đăng ký per-device + KPF secret RAM |
 | C6 | myjbd daemon | `/var/jb/Library/LaunchDaemons/` | server-side OTA container, `/activate`, revoke; chuẩn hoá XPC `com.staturnz.jbserver` (dùng lại HMAC challenge code của Amethyst) |
 | C7 | iOS 12–14 | nhánh riêng | ✅ `myjb_ktool --legacy` (payload `legacy_kpf`/`legacy_ramdisk` từ ra1npoc, `kpf_flags`, wValue 0xffff) — **verified máy thật iPhone 6s iOS 13.5.1**: kernel boot + loader checkra1n. Lưu ý: chuỗi palera1n **không chạy được < 15** — jbinit (plooshInit) cần `mount("tmpfs","/cores")`, kernel 13.5.1 không có tmpfs → `err=19 ENODEV` (strings "cannot mount tmpfs onto /cores" nằm trong `ramdisk.bin` beta8). Bootstrap: Cydia/odysseyra1n rootful |
@@ -127,13 +127,47 @@ với tool chạy Windows, dựa trên 2 repo bạn đưa + palera1n (nguồn pa
    palera1n gửi hết chain trên 13.5.1 — treo sau bootx do tmpfs, xem C7). Còn cần: máy
    A11/IOS 15 rootless để xác nhận boot palera1n đầy đủ.
 3. ✅ Loader bản checkm8: fallback khi vắng jbserver (`myjb_loader/src/main.c`) + deb
-   `checkm8/package/` — loader → `/var/jb/usr/lib/TweakInject/` (plist rỗng cho ElleKit),
-   postinst tạo dirs (0177 7) + sinh kdev + mirror rootful (plist `Bundles` tường minh),
-   `build.sh` đóng gói (dùng chung `myjb_loader.dylib` với Amethyst); CI artifact
-   `myjb-checkm8` + `myjb-e2e-testtweak`.
+   `checkm8/package/` — payload tách arch: rootless → `/var/jb/usr/lib/TweakInject/`
+   (plist rỗng cho ElleKit); rootful → `/usr/lib/myjb_loader.dylib` (không đụng `/var/jb`,
+   mirror engine chỉ khi engine có mặt, plist `Bundles` tường minh), postinst tạo dirs
+   (0177 7) + sinh kdev, `build.sh` đóng gói (dùng chung `myjb_loader.dylib` với Amethyst);
+   CI artifact `myjb-checkm8` + `myjb-e2e-testtweak`.
 4. ✅ E2E container trên máy 13.5.1 đã JB (iPhone 6s): deb → `kdev.txt` → `myjb_build.py`
    (DEV seed + `--kdev-hex`) → containers → respring → `e2e_ok` + `loader.log` xác nhận
    decrypt/dlopen thành công (guide mục I). Root cause lần đầu thất bại: plist `Filter`
    rỗng không được Substrate classic inject — đã sửa trong postinst.
    Lưu ý: **không** bật `MYJB_LEGACY` trên checkm8 (bootstrap tự load tweak thường).
 5. **Kế tiếp**: myjbd (C5/C6) — OTA container, `/activate`, revoke; sau đó C2 payload pin.
+
+## 6. Substrate-free injector (không cần substrate/libhooker) — checkra1n rootful
+
+Port basebins kiểu Amethyst để spoof myJB **không phụ thuộc Cydia Substrate** (thiết bị test đã gỡ substrate). Chuỗi:
+
+1. `/amethyst/jbutil -k` (fallback `jbutil -i 1 /amethyst/launchd_hook.dylib`) → inject
+   `launchd_hook` vào launchd (pid 1) qua `task_for_pid` (jbutil/src/process.c:363) —
+   checkra1n root làm được (AMFI off / entitlement `task_for_pid-allow`).
+2. `launchd_hook` (trong launchd) hook `posix_spawn` → thêm
+   `DYLD_INSERT_LIBRARIES=/usr/lib/base_hook.dylib` cho mọi process mới (trừ blocklist).
+3. `base_hook` ctor (base_hook/src/main.c:27) → dlopen `/usr/lib/myjb_loader.dylib`
+   → spoof layer (`myjb_hide`) chạy.
+
+Khác biệt checkra1n — **degraded kernel mode** (code đã sửa):
+
+- Không hsp4: `launchd_hook/src/main.c` fallback `task_for_pid(mach_task_self(), 0)` lấy
+  tfp0; không có `/amethyst/handoff.plist` → `kernel_base/slide` suy từ `TASK_DYLD_INFO`
+  (không có plist cũng không abort như trước).
+- `kernel_ready = (kern_proc_addr && kern_task_addr)` — thiếu patch addrs thì bỏ qua
+  cs flags/sandbox/arm64e/PPL/trustcache; jbserver vẫn hook xpc nhưng API cần kernel
+  trả lỗi mềm (loader đã có fallback từ trước).
+- `trustcache.c`: cờ `trustcache_enabled` — init fail (thiếu addrs) thì mọi
+  check/add no-op (checkra1n AMFI off nên dlopen vẫn chạy).
+- **Không nhánh nào tạo `/var/jb` trên rootful**: jbserver `myjb_prepare_dirs` và loader
+  `myjb_stage_write` đều gate `access("/var/jb")` (bài học MB Bank).
+- jbutil `-k` không phụ thuộc hsp4 trước khi inject (jbutil/src/main.c:88 inject thẳng);
+  tnsv2/handoff generation fail mềm trên checkra1n.
+
+Deploy: `sh checkm8/deploy_injector.sh` ([ssh_target] [port] [basebins_tar]) — cần
+`basebins.tar` từ `make all stage` (macOS/CI `build.yml`). Debug: `MYJB_DEBUG=1` thêm
+marker `/var/mobile/Library/MyJB/.myjb_debug` → loader ghi `loader.log`.
+Rollback: xóa 5 file (`/amethyst/{jbutil,launchd_hook.dylib}`,
+`/usr/lib/{base_hook,libjailbreak,myjb_loader}.dylib`) + reboot.

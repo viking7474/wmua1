@@ -43,7 +43,7 @@ legacy 12–14 **rootful** — dấu vết trên đĩa tồn tại cả khi khô
 |---|---|---|
 | Rootfs bị sửa (snapshot remount / shared-region patch 12.x) | `legacy_kpf.bin` chứa `kpf_find_offset_p_flags`, `_kpf_shared_region_root_dir_patch`, `_kpf_vnop_rootvp_auth_patch`, `"KPF: Disabled snapshot temporarily"` | liệt kê `/Applications/Cydia.app`, `/var/lib/dpkg`, `/etc/apt` |
 | Mount snapshot/fakefs khi JB đang bật | KPF (xem thêm `WinRa1n2.1_analysis.md` §5.4: "APFS mount/rename cho fakefs") | `getfsstat` / `statfs` |
-| Substrate + mirror loader | `checkm8/package/DEBIAN/postinst:52-60` (mirror vào `/Library/MobileSubstrate/DynamicLibraries`) | path + `_dyld_get_image_name` |
+| Substrate + mirror loader | `checkm8/package/DEBIAN/postinst` (`mirror_into` — chỉ mirror vào engine dirs khi engine thật sự có mặt; rootful không đụng `/var/jb`) | path + `_dyld_get_image_name` |
 | Env inject (`DYLD_INSERT_LIBRARIES`, marker) | cơ chế inject của bootstrap; `launchd_hook/src/loader.c` (Amethyst) | `getenv`, `sysctl KERN_PROCARGS2` |
 | Daemon lạ (jailbreakd/dropbear/myjbd) | process list | `sysctl KERN_PROC_ALL`, `proc_listpids` |
 | csflags giả (CS_DEBUGGED) | tiền lệ Amethyst `basebins/base_hook/src/hooks.c:51-69` | `csops_audittoken` |

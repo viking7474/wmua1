@@ -469,22 +469,31 @@ static int sandbox_check_by_audit_token_hook(audit_token_t at, const char *op, i
 }
 
 static void myjb_prepare_dirs(void) {
-    static const char *dirs[] = {
-        "/var/jb/usr/lib/myjb",
-        "/var/jb/usr/lib/myjb/containers",
-        "/var/jb/usr/lib/myjb/run",
+    static const char *mobile_dirs[] = {
         "/var/mobile/Library/MyJB",
         "/var/mobile/Library/MyJB/containers",
         "/var/mobile/Library/MyJB/run",
         NULL
     };
-    for (uint32_t i = 0; dirs[i] != NULL; i++) {
-        mkdir(dirs[i], 0755);
+    for (uint32_t i = 0; mobile_dirs[i] != NULL; i++) {
+        mkdir(mobile_dirs[i], 0755);
     }
-    chmod("/var/jb/usr/lib/myjb/run", 01777);
     chmod("/var/mobile/Library/MyJB/run", 01777);
     chown("/var/mobile/Library/MyJB", 501, 501);
     chown("/var/mobile/Library/MyJB/containers", 501, 501);
+
+    if (access("/var/jb", F_OK) == 0) {
+        static const char *jb_dirs[] = {
+            "/var/jb/usr/lib/myjb",
+            "/var/jb/usr/lib/myjb/containers",
+            "/var/jb/usr/lib/myjb/run",
+            NULL
+        };
+        for (uint32_t i = 0; jb_dirs[i] != NULL; i++) {
+            mkdir(jb_dirs[i], 0755);
+        }
+        chmod("/var/jb/usr/lib/myjb/run", 01777);
+    }
 }
 
 int init_server(void) {

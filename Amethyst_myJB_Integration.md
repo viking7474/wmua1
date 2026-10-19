@@ -227,6 +227,11 @@ Không có jbserver của mình (chưa JB / JB khác / binary lạ) → không a
 | `amethyst/Amethyst/Amethyst/ui/MainController.m` | nhận diện jailbroken qua image `/usr/lib/myjb_loader.dylib` |
 | `tools/myjb_build.py` | **MỚI**: builder container v1 thuần stdlib (Ed25519/ChaCha20-Poly1305/HKDF ref impl) — `--selftest` 12/12 PASS, `--info`, `--gen-key` |
 | `MyJB_Tweak_Dev_Guide.md` | **MỚI**: hướng dẫn tích hợp tweak (đóng container, filters, kdev, attestation API, deb Sileo, troubleshooting) |
+| `basebins/launchd_hook/src/main.c` | **Substrate-free/checkra1n**: hsp4 → fallback `task_for_pid(0)` lấy tfp0; `handoff.plist` optional (+ suy `kernel_base/slide` từ `TASK_DYLD_INFO`); `kernel_ready` gate cho cs flags/sandbox/arm64e/PPL/trustcache (degraded mode không abort) |
+| `basebins/launchd_hook/src/trustcache.c` | + cờ `trustcache_enabled` — init fail (thiếu patch addrs) thì check/add no-op |
+| `basebins/launchd_hook/src/jbserver.c` | `myjb_prepare_dirs()` không tạo `/var/jb` khi chưa tồn tại (rootful) |
+| `basebins/myjb_loader/src/main.c` | staging `myjb_mkdirs` tạo đủ parents + gate `/var/jb`; marker `.myjb_debug` (debug không cần env) |
+| `checkm8/deploy_injector.sh` | **MỚI**: deploy basebins qua SSH (scp tar → cài → `jbutil -k` → respring) + rollback |
 
 Toolchain build (xác nhận từ Makefile): macOS + Xcode CLT
 (`xcrun --sdk iphoneos clang`, `-arch arm64e -arch arm64`, `-mios-version-min=12.0`,

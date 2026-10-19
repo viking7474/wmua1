@@ -270,10 +270,15 @@ Cùng builder + cùng container v1; chỉ khác cách cài loader và engine:
 
 ## I. Chạy trên checkm8/checkra1n (rootful, iOS 12–14) — verified 13.5.1
 
-JB bằng `myjb_ktool.exe --legacy` (chuỗi checkra1n 0.12.4b). Bootstrap checkra1n
-(Cydia hoặc odysseyra1n): engine hook do Substrate/libhooker của bootstrap cấp;
-postinst tự mirror loader vào `/Library/MobileSubstrate/DynamicLibraries` (Cydia
-Substrate) và/hoặc `/usr/lib/TweakInject` (libhooker) — thư mục nào tồn tại.
+JB bằng `myjb_ktool.exe --legacy` (chuỗi checkra1n 0.12.4b). Deb rootful
+(`iphoneos-arm`) đặt loader tại `/usr/lib/myjb_loader.dylib` (đúng path Amethyst
+base_hook dlopens) — **không tạo `/var/jb`** (SDK chống JB của MB Bank abort chỉ vì
+path này tồn tại, đã kiểm chứng 13.5.1). Postinst tự mirror loader vào
+`/Library/MobileSubstrate/DynamicLibraries` (Cydia Substrate) và/hoặc
+`/usr/lib/TweakInject` (libhooker/ElleKit) — nhưng **chỉ khi engine thật sự có mặt**
+(`MobileSubstrate.dylib`/`libhooker.dylib`); thư mục rỗng sót lại sau khi gỡ Substrate
+sẽ không nhận loader. Deb rootless (`iphoneos-arm64`) vẫn dùng
+`/var/jb/usr/lib/TweakInject` cho ElleKit như trước.
 
 **Lưu ý filter (đã kiểm chứng trên 13.5.1):** Cydia Substrate classic **không** coi
 `Filter` rỗng là "mọi process" — loader sẽ không được inject (im lặng, không log).

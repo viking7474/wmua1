@@ -73,7 +73,7 @@ static void myjb_log(const char *fmt, ...) {
     va_end(args);
     fputc('\n', stderr);
 
-    if (getenv("MYJB_DEBUG") != NULL) {
+    if (getenv("MYJB_DEBUG") != NULL || access("/var/mobile/Library/MyJB/.myjb_debug", F_OK) == 0) {
         FILE *file = fopen("/var/mobile/Library/MyJB/loader.log", "a");
         if (file != NULL) {
             va_start(args, fmt);
@@ -200,10 +200,24 @@ static uint32_t myjb_dir_collect(const char *dir_path, const char *extension,
     return count;
 }
 
+static void myjb_mkdirs(const char *dir) {
+    char tmp[PATH_MAX] = {0};
+    strlcpy(tmp, dir, PATH_MAX);
+    for (char *p = tmp + 1; *p != '\0'; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            mkdir(tmp, 0755);
+            *p = '/';
+        }
+    }
+    mkdir(tmp, 0755);
+}
+
 static int myjb_stage_write(const uint8_t *data, uint32_t size, char *out_path, size_t out_size) {
     for (uint32_t i = 0; myjb_staging_dirs[i] != NULL; i++) {
         const char *dir = myjb_staging_dirs[i];
-        mkdir(dir, 01777);
+        if (strncmp(dir, "/var/jb/", 8) == 0 && access("/var/jb", F_OK) != 0) continue;
+        myjb_mkdirs(dir);
         chmod(dir, 01777);
 
         char path[PATH_MAX] = {0};

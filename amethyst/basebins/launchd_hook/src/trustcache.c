@@ -10,6 +10,7 @@ static recent_trustcache_entry_t *recent_entries = NULL;
 static uint32_t recent_entry_idx = 0;
 static bool use_recent_entries = true;
 static pthread_mutex_t tc_lock = PTHREAD_MUTEX_INITIALIZER;
+static bool trustcache_enabled = false;
 
 int trustcache_init(void) {
     if ((tc_info = calloc(1, sizeof(trustcache_info_t))) == NULL) goto err;
@@ -261,6 +262,7 @@ int trustcache_init(void) {
         trustcache_add_binary("/amethyst/jbutil");
         trustcache_add_binary("/amethyst/launchd_hook.dylib");
     }
+    trustcache_enabled = true;
     return 0;
     
 err:
@@ -273,6 +275,7 @@ err:
 }
 
 int trustcache_reset(void) {
+    if (!trustcache_enabled) return 0;
     if (tc_info == NULL || tc_info->dynamic_entries == 0) return -1;
     if (tc_info->dynamic_type == DYNAMIC_TC_TYPE_V1) {
         dynamic_trustcache_full_entry_t *user_entries = calloc(1, tc_info->dynamic_size);
@@ -428,6 +431,7 @@ int trustcache_add_binary(const char *path) {
 }
 
 bool trustcache_lock_check(uint8_t *cd_hash) {
+    if (!trustcache_enabled) return true;
     pthread_mutex_lock(&tc_lock);
     bool found = trustcache_check(cd_hash);
     pthread_mutex_unlock(&tc_lock);
@@ -435,6 +439,7 @@ bool trustcache_lock_check(uint8_t *cd_hash) {
 }
 
 int trustcache_lock_add_hash(uint8_t *cd_hash, uint8_t hash_type) {
+    if (!trustcache_enabled) return 0;
     pthread_mutex_lock(&tc_lock);
     int status = trustcache_add_hash(cd_hash, hash_type);
     pthread_mutex_unlock(&tc_lock);
@@ -442,6 +447,7 @@ int trustcache_lock_add_hash(uint8_t *cd_hash, uint8_t hash_type) {
 }
 
 int trustcache_lock_add_binary(const char *path) {
+    if (!trustcache_enabled) return 0;
     pthread_mutex_lock(&tc_lock);
     int status = trustcache_add_binary(path);
     pthread_mutex_unlock(&tc_lock);
