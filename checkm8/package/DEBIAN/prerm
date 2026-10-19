@@ -1,8 +1,20 @@
 #!/bin/sh
 set -e
 
-for d in "/Library/MobileSubstrate/DynamicLibraries" "/usr/lib/TweakInject"; do
+for d in "/Library/MobileSubstrate/DynamicLibraries" "/usr/lib/TweakInject" "/var/jb/usr/lib/TweakInject"; do
     rm -f "$d/myjb_loader.dylib" "$d/myjb_loader.plist"
 done
+
+# Earlier rootful builds left /var/jb behind; remove it if (and only if) it is
+# now empty. A real rootless bootstrap keeps files there, so the rmdir fails
+# silently and nothing is touched.
+ARCH="$(dpkg --print-architecture 2>/dev/null || echo unknown)"
+case "$ARCH" in
+    iphoneos-arm64*) ;;
+    *)
+        rmdir "/var/jb/usr/lib/myjb/run" "/var/jb/usr/lib/myjb/containers" 2>/dev/null || true
+        rmdir "/var/jb/usr/lib/myjb" "/var/jb/usr/lib/TweakInject" "/var/jb/usr/lib" "/var/jb/usr" "/var/jb" 2>/dev/null || true
+        ;;
+esac
 
 exit 0

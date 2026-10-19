@@ -3,11 +3,14 @@ Name: myJB Loader (checkm8)
 Version: 1.0.0
 Architecture: iphoneos-arm64
 Description: myJB container loader (checkm8: palera1n 15+, checkra1n 12-14)
- Installs myjb_loader.dylib into the tweak injection directory (ElleKit
- /var/jb rootless, or /Library/MobileSubstrate/DynamicLibraries and
- /usr/lib/TweakInject on rootful bootstrap like checkra1n 0.12.4b), so
- that .myjb containers are decrypted and loaded in every process. Creates
- the container/staging directories and generates the device key (kdev).
+ Rootless payload (iphoneos-arm64): myjb_loader.dylib + plist into
+ /var/jb/usr/lib/TweakInject for ElleKit. Rootful payload (iphoneos-arm,
+ checkra1n 12-14): loader at /usr/lib/myjb_loader.dylib (the path Amethyst
+ base_hook dlopens); postinst mirrors it into
+ /Library/MobileSubstrate/DynamicLibraries or /usr/lib/TweakInject only
+ when that engine is actually installed, and never creates /var/jb on
+ rootful (anti-JB SDKs abort on that path alone). Creates the
+ container/staging directories and generates the device key (kdev).
  Respring after installing.
 Maintainer: wmua1
 Author: wmua1

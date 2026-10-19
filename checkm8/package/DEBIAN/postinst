@@ -1,10 +1,19 @@
 #!/bin/sh
 set -e
 
-mkdir -p "/var/jb/usr/lib/myjb/containers" "/var/jb/usr/lib/myjb/run"
-mkdir -p "/var/mobile/Library/MyJB/containers" "/var/mobile/Library/MyJB/run"
+# Two flavors of this package exist:
+#   iphoneos-arm64 (rootless, Procursus): payload is /var/jb/usr/lib/TweakInject/*
+#   iphoneos-arm   (rootful, checkra1n 12-14): payload is /usr/lib/myjb_loader.dylib
+# On rootful we must NEVER create /var/jb: anti-JB SDKs (MB Bank) abort on
+# that path alone (verified on 13.5.1) even with nothing inside.
+ARCH="$(dpkg --print-architecture 2>/dev/null || echo unknown)"
+case "$ARCH" in
+    iphoneos-arm64*) ROOTLESS=1 ;;
+    *) ROOTLESS=0 ;;
+esac
 
-chmod 1777 "/var/jb/usr/lib/myjb/run" "/var/mobile/Library/MyJB/run"
+mkdir -p "/var/mobile/Library/MyJB/containers" "/var/mobile/Library/MyJB/run"
+chmod 1777 "/var/mobile/Library/MyJB/run"
 chown mobile:mobile "/var/mobile/Library/MyJB" "/var/mobile/Library/MyJB/containers" "/var/mobile/Library/MyJB/run" 2>/dev/null || true
 
 if [ ! -f "/var/mobile/Library/MyJB/kdev" ]; then
@@ -20,13 +29,6 @@ else
     echo >> "/var/mobile/Library/MyJB/kdev.txt"
 fi
 chmod 644 "/var/mobile/Library/MyJB/kdev.txt"
-
-# Rootful bootstraps (checkra1n 12-14) do not read /var/jb: mirror the loader
-# into every injection directory that exists on this device. Classic Cydia
-# Substrate (iOS 9+) does NOT treat an empty Filter as "all processes", so the
-# rootful copies get an explicit Bundles filter (verified on 13.5.1: the empty
-# packaged plist only works with ElleKit/libhooker).
-SRC_DYLIB="/var/jb/usr/lib/TweakInject/myjb_loader.dylib"
 
 write_rootful_plist() {
     cat > "$1" <<'PLIST_EOF'
@@ -49,15 +51,46 @@ write_rootful_plist() {
 PLIST_EOF
 }
 
-for d in "/Library/MobileSubstrate/DynamicLibraries" "/usr/lib/TweakInject"; do
-    if [ -d "$d" ]; then
-        cp -f "$SRC_DYLIB" "$d/"
-        write_rootful_plist "$d/myjb_loader.plist"
-        chmod 755 "$d/myjb_loader.dylib"
-        chmod 644 "$d/myjb_loader.plist"
-        echo "[myjb] loader installed into $d (rootful)"
+mirror_into() {
+    SRC="$1"
+    DIR="$2"
+    LABEL="$3"
+    cp -f "$SRC" "$DIR/myjb_loader.dylib"
+    write_rootful_plist "$DIR/myjb_loader.plist"
+    chmod 755 "$DIR/myjb_loader.dylib"
+    chmod 644 "$DIR/myjb_loader.plist"
+    echo "[myjb] loader mirrored into $DIR ($LABEL)"
+}
+
+if [ "$ROOTLESS" = "1" ]; then
+    mkdir -p "/var/jb/usr/lib/myjb/containers" "/var/jb/usr/lib/myjb/run"
+    chmod 1777 "/var/jb/usr/lib/myjb/run"
+    echo "[myjb] rootless install: ElleKit reads /var/jb/usr/lib/TweakInject"
+else
+    # Remove leftovers of earlier rootful builds that wrongly created /var/jb
+    # (loader payload + postinst dirs). rmdir only drops empty dirs, so a real
+    # rootless bootstrap can never be touched by this branch.
+    rm -f "/var/jb/usr/lib/TweakInject/myjb_loader.dylib" "/var/jb/usr/lib/TweakInject/myjb_loader.plist"
+    rmdir "/var/jb/usr/lib/myjb/run" "/var/jb/usr/lib/myjb/containers" 2>/dev/null || true
+    rmdir "/var/jb/usr/lib/myjb" "/var/jb/usr/lib/TweakInject" "/var/jb/usr/lib" "/var/jb/usr" "/var/jb" 2>/dev/null || true
+
+    # Mirror only when an injection engine is actually installed; otherwise
+    # remove stale loader copies (MB Bank scans these directories even after
+    # Substrate was removed).
+    if [ -f "/Library/MobileSubstrate/MobileSubstrate.dylib" ] && [ -d "/Library/MobileSubstrate/DynamicLibraries" ]; then
+        mirror_into "/usr/lib/myjb_loader.dylib" "/Library/MobileSubstrate/DynamicLibraries" "Cydia Substrate"
+    else
+        rm -f "/Library/MobileSubstrate/DynamicLibraries/myjb_loader.dylib" \
+              "/Library/MobileSubstrate/DynamicLibraries/myjb_loader.plist"
     fi
-done
+    if { [ -f "/usr/lib/libhooker.dylib" ] || [ -f "/usr/lib/libellekit.dylib" ]; } && [ -d "/usr/lib/TweakInject" ]; then
+        mirror_into "/usr/lib/myjb_loader.dylib" "/usr/lib/TweakInject" "libhooker/ElleKit"
+    else
+        rm -f "/usr/lib/TweakInject/myjb_loader.dylib" \
+              "/usr/lib/TweakInject/myjb_loader.plist"
+    fi
+    echo "[myjb] rootful install: loader at /usr/lib/myjb_loader.dylib (no /var/jb)"
+fi
 
 echo "[myjb] install ok; kdev hex: cat /var/mobile/Library/MyJB/kdev.txt"
 echo "[myjb] copy that hex to the PC (--kdev-hex), then delete kdev.txt"
